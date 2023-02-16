@@ -1,0 +1,19 @@
+[features]
+seeds = true
+
+[programs.localnet]
+solana_contracts = "Fx175EjmJi6fRa79dLdvcHZx29CPFHBLvvHTmXmDnfGm"
+[programs.testnet]
+solana_contracts = "Fx175EjmJi6fRa79dLdvcHZx29CPFHBLvvHTmXmDnfGm"
+[programs.devnet]
+solana_contracts = "Fx175EjmJi6fRa79dLdvcHZx29CPFHBLvvHTmXmDnfGm"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
