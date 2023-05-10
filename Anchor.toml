@@ -1,18 +1,19 @@
 [features]
-seeds = true
+seeds = false
+skip-lint = false
 
 [programs.localnet]
-solana_contracts = "Fx175EjmJi6fRa79dLdvcHZx29CPFHBLvvHTmXmDnfGm"
-[programs.testnet]
-solana_contracts = "Fx175EjmJi6fRa79dLdvcHZx29CPFHBLvvHTmXmDnfGm"
+sallar = "GKfKLJS8rnwWuKBdQtic5FC6psq44Pr7H7RPtV94fxaN"
 [programs.devnet]
-solana_contracts = "Fx175EjmJi6fRa79dLdvcHZx29CPFHBLvvHTmXmDnfGm"
+sallar = "GKfKLJS8rnwWuKBdQtic5FC6psq44Pr7H7RPtV94fxaN"
+[programs.testnet]
+sallar = "GKfKLJS8rnwWuKBdQtic5FC6psq44Pr7H7RPtV94fxaN"
 
 [registry]
-url = "https://anchor.projectserum.com"
+url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

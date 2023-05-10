@@ -1,0 +1,30 @@
+[package]
+name = "Sallar"
+version = "0.1.0"
+description = "Sallar SPL Token on Solana network"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "sallar"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dev-dependencies]
+csv = "1.1.6"
+rand = "0.8.5"
+test-case = "3.0.0"
+solana-program = "1.15.2"
+solana-program-test = "1.15.2"
+solana-sdk = "1.15.2"
+chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
+
+[dependencies]
+anchor-lang = "0.27.0"
+anchor-spl = "0.27.0"
+winnow = "=0.4.1" # Workaround for issue coming from the current Solana version, more details: https://solana.stackexchange.com/questions/6526/error-package-winnow-v0-4-4-cannot-be-built-because-it-requires-rustc-1-64-0/6535
