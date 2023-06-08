@@ -57,7 +57,7 @@ Execute below commands in the environment where you set up the dependencies ment
 - Configure Solana CLI to use test Solana validator: `solana config set --url https://localhost:8899`
 - Use Solana airdrop to generate some Solana tokens on the test validator: `solana airdrop 10000000000 --keypair ~/.config/solana/id.json --url http://localhost:8899` (generates 100 tokens)
 - Deploy Sallar (it's deployed to test Solana validator by default): `anchor deploy`
-- Run tests in Rust for Sallar: `cargo test`
+- Run tests in Rust for Sallar: `cargo-test-sbf --features bpf-tests --arch bpf`
 - Run tests in TypeScript for Sallar: `anchor test`
 
 # Project Structure 
@@ -115,13 +115,18 @@ There are two types of tests created to test Sallar:
 - Anchor client tests - tests written in TypeScript placed in `tests` directory. This is the recommended approach for testing code written in Anchor. It is integration testing performed using the client provided by Anchor. It simulates the usual way of invoking the deployed smart contract.
 
 ## Code coverage
-Code coverage has been checked using [cargo-tarpaulin crate](https://crates.io/crates/cargo-tarpaulin), but it doesn't provide reliable results. While it detects the coverage for functions tested directly (by invoking them in the tests), it fails to detect coverage for functions tested indirectly, i.e. those invoked using the `solana-program-test` crate.
+Code coverage has been checked using [cargo-tarpaulin crate](https://crates.io/crates/cargo-tarpaulin), but it doesn't provide reliable results. While it detects the coverage for functions tested directly (by invoking them in the tests), it fails to detect coverage for functions tested indirectly, i.e. those invoked using the `solana-program-test` crate (integration tests).
 
 That's why we decided to use it as a hint, rather than something that defines how well the code is covered. Since we haven't found any working solutions to properly detect code coverage, or to test the code in a better way that would be detected by `cargo-tarpaulin`, we were forced to rely mainly on the code review process to determine the completeness of tests.
 
+Moreover, we found no way to use `cargo-tarpaulin` with BPF. As token metadata is set using Metaplex program during contract's initialization, the integration tests written in Rust need to use BPF to deploy the Metaplex program correctly and to be able to execute the integration tests. That's why the integration tests are executed only if `bpf-tests` feature is enabled. Otherwise, they're skipped. It allows `cargo-tarpaulin` to run successfully by skipping these tests which results in much lower code coverage than the real one.
+
+We also didn't find any alternative tools for code coverage that would work with BPF. So for now it seems that there is no proper way to measure code coverage in such a case.
+
 ## Running tests
 Use the following commands to run tests:
-- Rust tests: `cargo test`
+- All Rust tests (all tests): `cargo-test-sbf --features bpf-tests --arch bpf`
+- Unit Rust tests (skips tests using `solana-program-test` crate): `cargo test` or `cargo-test-sbf --arch bpf`
 - TypeScript tests: `anchor test`
 
 ## Extended scope of Sallar math tests

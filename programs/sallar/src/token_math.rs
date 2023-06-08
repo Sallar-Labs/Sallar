@@ -65,9 +65,7 @@ pub fn calculate_max_bp(block_index: u64) -> Result<f64, Error> {
 
 pub fn calculate_dust_per_bp(block_index: u64) -> Result<f64, Error> {
     let max_bp = calculate_max_bp(block_index)?;
-    let result = convert_u64_to_f64_safely(DUSTS_PER_BLOCK)? / max_bp;
-
-    Ok(result)
+    Ok(convert_u64_to_f64_safely(DUSTS_PER_BLOCK)? / max_bp)
 }
 
 fn calculate_top_block_max_boost(block_index: u64) -> Result<u64, Error> {

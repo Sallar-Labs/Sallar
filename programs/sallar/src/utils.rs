@@ -1,12 +1,17 @@
-use anchor_lang::prelude::{
+use anchor_lang::{prelude::{
     require, Account, AccountInfo, Clock, CpiContext, Result, SolanaSysvar, ToAccountInfo,
-};
+}, context, solana_program::program::invoke_signed};
 use anchor_spl::token::{self, Mint, MintTo, TokenAccount, Transfer};
+
+use mpl_token_metadata::instruction::create_metadata_accounts_v3;
 
 use crate::{
     account::BlocksState, error::SallarError, token_math::calculate_max_bp,
-    token_math::DUSTS_PER_BLOCK, MINT_SEED,
+    token_math::DUSTS_PER_BLOCK, MINT_SEED, context as SallarContext
 };
+use context::*;
+use SallarContext::InitializeContext;
+
 
 const MIN_BLOCKS_SOLUTION_INTERVAL_SECONDS: i64 = 180;
 const MIN_FINAL_STAKING_SOLUTION_INTERVAL_SECONDS: i64 = 72_000;
@@ -165,7 +170,7 @@ pub fn final_staking_required_interval_elapsed(
 /// ### Returns
 /// An error if blocks have not collided yet, otherwise a successful result.
 pub fn blocks_collided(state: &BlocksState) -> Result<()> {
-    require!(state.blocks_collided == true, SallarError::BlocksNotCollidedYet);
+    require!(state.blocks_collided, SallarError::BlocksNotCollidedYet);
 
     Ok(())
 }
@@ -210,8 +215,8 @@ pub fn bottom_block_not_solved(state: &BlocksState) -> Result<()> {
 /// ### Returns
 /// An error if either top block or bottom is not solved (any of them has available BPs), otherwise a successful result.
 pub fn blocks_solved(state: &BlocksState) -> Result<()> {
-    require!(state.top_block_available_bp <= 0, SallarError::TopBlockNotSolvedYet);
-    require!(state.bottom_block_available_bp <= 0, SallarError::BottomBlockNotSolvedYet);
+    require!(state.top_block_available_bp == 0, SallarError::TopBlockNotSolvedYet);
+    require!(state.bottom_block_available_bp == 0, SallarError::BottomBlockNotSolvedYet);
 
     Ok(())
 }
@@ -242,7 +247,7 @@ pub fn update_blocks_collided(state: &mut BlocksState) -> Result<()> {
 /// ### Returns
 /// An error if the initial_token_distribution function has been already successfully executed, otherwise a successful result.
 pub fn initial_token_distribution_not_performed_yet(state: &BlocksState) -> Result<()> {
-    require!(state.initial_token_distribution_already_performed == false, SallarError::InitialTokenDistributionAlreadyPerformed);
+    require!(!state.initial_token_distribution_already_performed, SallarError::InitialTokenDistributionAlreadyPerformed);
 
     Ok(())
 }
@@ -295,7 +300,7 @@ pub fn switch_top_block_to_next_one_if_applicable<'a>(
 
     if state.top_block_available_bp == 0 && can_block_be_switched(state) {
         state.top_block_solution_timestamp = Clock::get()?.unix_timestamp;
-        state.top_block_number = state.top_block_number + 1;
+        state.top_block_number += 1;
 
         let authority = mint.to_account_info();
         let mint_token_account = mint.to_account_info();
@@ -346,7 +351,7 @@ pub fn switch_bottom_block_to_next_one_if_applicable<'a>(
 
     if state.bottom_block_available_bp == 0 && can_block_be_switched(state) {
         state.bottom_block_solution_timestamp = Clock::get()?.unix_timestamp;
-        state.bottom_block_number = state.bottom_block_number - 1;
+        state.bottom_block_number -= 1;
 
         let authority = mint.to_account_info();
         let mint_token_account = mint.to_account_info();
@@ -415,6 +420,70 @@ pub fn convert_u64_to_f64_safely(value: u64) -> Result<f64> {
     );
 
     Ok(value_f64)
+}
+
+/// Sets token metadata
+///
+/// ### Arguments
+///
+/// * `name` - token name
+/// * `symbol` - token symbol
+/// * `uri` - token uri
+pub fn set_token_metadata(
+    ctx: Context<InitializeContext>,
+    name: String,
+    symbol: String,
+    uri: String,
+) -> Result<()> {
+    let program_id = ctx.accounts.metadata_program.to_account_info();
+    let metadata_pda = ctx.accounts.metadata_pda.to_account_info();
+    let mint = ctx.accounts.mint.to_account_info();
+    let mint_authority = ctx.accounts.mint.to_account_info();
+    let payer = ctx.accounts.signer.to_account_info();
+    let update_authority = ctx.accounts.mint.to_account_info();
+    let system_program = ctx.accounts.system_program.to_account_info();
+
+    let seeds = &[
+        MINT_SEED.as_bytes(),
+        &[ctx.accounts.blocks_state_account.mint_nonce],
+    ];
+
+    let account_infos = &[
+        program_id.clone(),
+        metadata_pda.clone(),
+        mint.clone(),
+        mint_authority.clone(),
+        payer.clone(),
+        update_authority.clone(),
+        system_program.clone(),
+    ];
+
+    let create_metadata_accounts_instruction = create_metadata_accounts_v3(
+        *program_id.key,
+        *metadata_pda.key,
+        *mint.key,
+        *mint_authority.key,
+        *payer.key,
+        *update_authority.key,
+        name.clone(),
+        symbol.clone(),
+        uri.clone(),
+        None,
+        0u16,
+        false,
+        true,
+        None,
+        None,
+        None,
+    );
+
+    invoke_signed(
+        &create_metadata_accounts_instruction,
+        account_infos,
+        &[seeds],
+    )?;
+
+    Ok(())
 }
 
 #[cfg(test)]

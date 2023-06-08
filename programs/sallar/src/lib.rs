@@ -42,7 +42,7 @@ pub mod sallar {
         blocks_collided, blocks_solution_required_interval_elapsed, blocks_solved,
         bottom_block_not_solved, convert_f64_to_u64_safely, convert_u64_to_f64_safely,
         final_staking_required_interval_elapsed, initial_token_distribution_not_performed_yet,
-        mint_tokens, switch_bottom_block_to_next_one_if_applicable,
+        mint_tokens, switch_bottom_block_to_next_one_if_applicable, set_token_metadata,
         switch_top_block_to_next_one_if_applicable, top_block_not_solved, transfer_tokens,
         update_blocks_collided, valid_owner, valid_signer,
     };
@@ -55,26 +55,34 @@ pub mod sallar {
     /// ### Arguments
     ///
     /// * `ctx` - the initialization context where all the accounts are provided,
-    /// * `mint_nonce` - nonce for mint account,
-    /// * `block_state_nonce` - nonce for blocks state account,
-    /// * `top_block_nonce` - nonce for top block account,
-    /// * `bottom_block_nonce` - nonce for bottom block account,
-    /// * `final_staking_account_nonce` - nonce for final staking account,
-    /// * `final_mining_account_nonce` - nonce for final mining account.
+    /// * `token_metadata_name` - token's name to set in metadata,
+    /// * `token_metadata_symbol` - token's symbol to set in metadata,
+    /// * `token_metadata_uri` - token's uri to set in metadata,
     #[access_control(valid_signer(&ctx.accounts.signer))]
     pub fn initialize(
         ctx: Context<InitializeContext>,
-        mint_nonce: u8,
-        block_state_nonce: u8,
-        top_block_nonce: u8,
-        bottom_block_nonce: u8,
-        final_staking_account_nonce: u8,
-        final_mining_account_nonce: u8,
+        token_metadata_name: String,
+        token_metadata_symbol: String,
+        token_metadata_uri: String,
     ) -> Result<()> {
+        let program_id = id();
+        let (_, mint_nonce) =
+            Pubkey::find_program_address(&[MINT_SEED.as_bytes()], &program_id);
+        let (_, blocks_state_nonce) =
+            Pubkey::find_program_address(&[BLOCKS_STATE_SEED.as_bytes()], &program_id);
+        let (_, top_block_nonce) =
+            Pubkey::find_program_address(&[DISTRIBUTION_TOP_BLOCK_SEED.as_bytes()], &program_id);
+        let (_, bottom_block_nonce) =
+            Pubkey::find_program_address(&[DISTRIBUTION_BOTTOM_BLOCK_SEED.as_bytes()], &program_id);
+        let (_, final_staking_account_nonce) =
+            Pubkey::find_program_address(&[FINAL_STAKING_ACCOUNT_SEED.as_bytes()], &program_id);
+        let (_, final_mining_account_nonce) =
+            Pubkey::find_program_address(&[FINAL_MINING_ACCOUNT_SEED.as_bytes()], &program_id);
+
         let blocks_state = &mut ctx.accounts.blocks_state_account;
         blocks_state.authority = ctx.accounts.signer.key();
         blocks_state.mint_nonce = mint_nonce;
-        blocks_state.block_state_nonce = block_state_nonce;
+        blocks_state.block_state_nonce = blocks_state_nonce;
 
         blocks_state.top_block_distribution_address = ctx.accounts.distribution_top_block_account.key();
         blocks_state.top_block_distribution_nonce = top_block_nonce;
@@ -107,7 +115,7 @@ pub mod sallar {
 
         blocks_state.final_mining_account_nonce = final_mining_account_nonce;
 
-        Ok(())
+        set_token_metadata(ctx, token_metadata_name, token_metadata_symbol, token_metadata_uri)
     }
 
     /// Distributes 2 600 000 000 tokens to the organization account provided in the context by minting tokens to the account.
@@ -178,8 +186,7 @@ pub mod sallar {
                 )?;
 
             if current_user_reward_bp <= blocks_state.top_block_available_bp {
-                blocks_state.top_block_available_bp =
-                    blocks_state.top_block_available_bp - current_user_reward_bp;
+                blocks_state.top_block_available_bp -= current_user_reward_bp;
             } else {
                 blocks_state.top_block_available_bp = 0;
             }
@@ -197,8 +204,7 @@ pub mod sallar {
                 current_user_transfer_amount,
             )?;
 
-            blocks_state.top_block_balance =
-                blocks_state.top_block_balance - current_user_transfer_amount;
+            blocks_state.top_block_balance -= current_user_transfer_amount;
         }
 
         switch_top_block_to_next_one_if_applicable(blocks_state, mint_nonce, &ctx.accounts.mint, ctx.accounts.distribution_top_block_account.to_account_info(), ctx.accounts.token_program.to_account_info())?;
@@ -265,8 +271,7 @@ pub mod sallar {
                 )?;
 
             if current_user_reward_bp <= blocks_state.bottom_block_available_bp {
-                blocks_state.bottom_block_available_bp =
-                    blocks_state.bottom_block_available_bp - current_user_reward_bp;
+                blocks_state.bottom_block_available_bp -= current_user_reward_bp;
             } else {
                 blocks_state.bottom_block_available_bp = 0;
             }
@@ -284,7 +289,7 @@ pub mod sallar {
                 current_user_transfer_amount,
             )?;
 
-            blocks_state.bottom_block_balance = blocks_state.bottom_block_balance - current_user_transfer_amount;
+            blocks_state.bottom_block_balance -= current_user_transfer_amount;
         }
 
         switch_bottom_block_to_next_one_if_applicable(blocks_state, mint_nonce, &ctx.accounts.mint, ctx.accounts.distribution_bottom_block_account.to_account_info(), ctx.accounts.token_program.to_account_info())?;
@@ -371,8 +376,7 @@ pub mod sallar {
                 SallarError::FinalStakingPoolInRoundIsEmpty
             );
 
-            blocks_state.final_staking_left_balance_in_round =
-                blocks_state.final_staking_pool_in_round;
+            blocks_state.final_staking_left_balance_in_round = blocks_state.final_staking_pool_in_round;
             blocks_state.final_staking_left_reward_parts_in_round = 1.0;
         }
 
@@ -436,9 +440,7 @@ pub mod sallar {
 
                 blocks_state.final_staking_left_reward_parts_in_round =
                     reward_parts_pool_after_user;
-                blocks_state.final_staking_left_balance_in_round = blocks_state
-                    .final_staking_left_balance_in_round
-                    - current_user_transfer_amount;
+                blocks_state.final_staking_left_balance_in_round -= current_user_transfer_amount;
             }
         }
 
@@ -508,7 +510,6 @@ mod test {
 
     use anchor_lang::{prelude::AccountMeta, system_program, InstructionData, ToAccountMetas};
     use anchor_spl::token::spl_token;
-    use solana_program::sysvar::clock::Clock;
     use solana_program_test::*;
     use spl_token::state::Account;
 
@@ -522,6 +523,9 @@ mod test {
     };
 
     use utils::final_staking_required_interval_elapsed;
+
+    #[cfg(feature = "bpf-tests")]
+    use solana_program::sysvar::clock::Clock;
 
     impl Clone for UserInfoBottomBlock {
         fn clone(&self) -> Self {
@@ -552,29 +556,34 @@ mod test {
         let program_id = id();
         let (
             mint_pda,
-            mint_nonce,
+            _,
             blocks_state_pda,
-            block_state_nonce,
+            _,
             distribution_top_block_pda,
-            distribution_top_block_nonce,
+            _,
             distribution_bottom_block_pda,
-            distribution_bottom_block_nonce,
+            _,
             final_staking_account_pda,
-            final_staking_account_nonce,
+            _,
             final_mining_account_pda,
-            final_mining_account_nonce,
+            _,
         ) = get_pda_accounts();
+        let metadata_seed1 = "metadata".as_bytes();
+        let metadata_seed2 = &mpl_token_metadata::id().to_bytes();
+        let metadata_seed3 = &mint_pda.to_bytes();
+        let (metadata_pda, _) =
+            Pubkey::find_program_address(&[metadata_seed1, metadata_seed2, metadata_seed3], &mpl_token_metadata::id());
 
         let token_program = spl_token::id();
         let signer = payer.pubkey();
+        let token_metadata_name = "Sallar".to_string();
+        let token_metadata_symbol = "ALL".to_string();
+        let token_metadata_uri = "http://sallar.io".to_string();
 
         let data = instruction::Initialize {
-            mint_nonce,
-            block_state_nonce,
-            top_block_nonce: distribution_top_block_nonce,
-            bottom_block_nonce: distribution_bottom_block_nonce,
-            final_staking_account_nonce,
-            final_mining_account_nonce,
+            token_metadata_name,
+            token_metadata_symbol,
+            token_metadata_uri,
         }
         .data();
 
@@ -588,6 +597,8 @@ mod test {
             distribution_bottom_block_account: distribution_bottom_block_pda,
             final_staking_account: final_staking_account_pda,
             final_mining_account: final_mining_account_pda,
+            metadata_pda,
+            metadata_program: mpl_token_metadata::id()
         };
 
         let mut transaction = Transaction::new_with_payer(
@@ -601,13 +612,14 @@ mod test {
 
         transaction.sign(&[payer], recent_blockhash);
         banks_client
-            .process_transaction_with_commitment(transaction.clone(), CommitmentLevel::Finalized)
+            .process_transaction_with_commitment(transaction.clone(), CommitmentLevel::Confirmed)
             .await
             .unwrap();
 
         Ok(())
     }
 
+    #[cfg(feature = "bpf-tests")]
     async fn initial_token_distribution_instruction(
         banks_client: &mut BanksClient,
         payer: &Keypair,
@@ -648,10 +660,20 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_initialize() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
@@ -659,15 +681,25 @@ mod test {
             .unwrap();
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_initial_token_distribution() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
             .await
             .unwrap();
+        
         let (mint_pda, _) = Pubkey::find_program_address(&[MINT_SEED.as_bytes()], &program_id);
         let organization_account =
             create_token_account(&mut banks_client, &payer, recent_blockhash, mint_pda)
@@ -837,10 +869,19 @@ mod test {
         (key_list, users_info)
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_solve_top_block_full_block() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
@@ -877,11 +918,19 @@ mod test {
         }
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_solve_top_two_blocks_move_time() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(5000000);
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
 
         let mut program_test_context = program_test.start_with_context().await;
         let mut banks_client = program_test_context.banks_client.clone();
@@ -947,7 +996,15 @@ mod test {
     #[should_panic]
     async fn test_fail_solve_top_block() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
@@ -970,10 +1027,19 @@ mod test {
         }
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_solve_bottom_block() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
@@ -1000,10 +1066,19 @@ mod test {
         }
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_solve_bottom_block_full_block() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
@@ -1031,12 +1106,20 @@ mod test {
             assert_eq!(user_account_data.amount, 2000000000000);
         }
     }
-
+    
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_solve_bottom_block_two_blocks() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(5000000);
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
 
         let mut program_test_context = program_test.start_with_context().await;
         let mut banks_client = program_test_context.banks_client.clone();
@@ -1095,7 +1178,15 @@ mod test {
     #[should_panic]
     async fn test_fail_solve_bottom_block_block() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
@@ -1201,7 +1292,15 @@ mod test {
     #[should_panic]
     async fn test_final_staking() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
@@ -1283,11 +1382,19 @@ mod test {
         final_staking_required_interval_elapsed(&1).unwrap();
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_new_authority() {
         let program_id = id();
-        let mut program_test = ProgramTest::new("leancoin", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(500000);
+
+        program_test.add_program(
+            "mpl_token_metadata",
+            mpl_token_metadata::id(),
+            None,
+        );
+        program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
         let signer = payer.pubkey();
@@ -1325,7 +1432,7 @@ mod test {
     #[should_panic]
     async fn test_new_authority_with_wrong_signer() {
         let program_id = id();
-        let mut program_test = ProgramTest::new("leancoin", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(500000);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -1440,6 +1547,7 @@ mod test {
         )
     }
 
+    #[cfg(feature = "bpf-tests")]
     async fn set_time(ctx: &mut ProgramTestContext, time: i64) {
         let clock_sysvar: Clock = ctx.banks_client.get_sysvar().await.unwrap();
         let mut new_clock = clock_sysvar.clone();

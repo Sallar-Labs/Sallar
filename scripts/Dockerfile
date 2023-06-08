@@ -6,7 +6,7 @@ ARG ANCHOR_VERSION
 
 ### Install Required Packages ###
 RUN apt update
-RUN apt install -y curl
+RUN apt install -y curl git
 
 ### Install Rust ###
 RUN curl --proto '=https' --tlsv1.2 -sSf "https://sh.rustup.rs" | sh -s -- -y

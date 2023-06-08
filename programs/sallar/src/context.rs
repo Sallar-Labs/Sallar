@@ -8,6 +8,7 @@ use anchor_lang::{
     Id,
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use mpl_token_metadata;
 
 use crate::{
     account::BlocksState, BLOCKS_STATE_SEED, DISTRIBUTION_BOTTOM_BLOCK_SEED,
@@ -127,6 +128,14 @@ pub struct InitializeContext<'info> {
         bump,
     )]
     pub final_mining_account: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: The metadata program account. It is considered safe because it is checked by the inner instruction, ensuring it is the correct account.
+    #[account(mut, address = Pubkey::find_program_address(&[b"metadata", &mpl_token_metadata::id().to_bytes(), &mint.key().to_bytes()], &mpl_token_metadata::id()).0)]
+    pub metadata_pda: AccountInfo<'info>,
+
+    /// CHECK: The metadata program account. It is considered safe because it is checked by the inner instruction, ensuring it is the correct account.
+    #[account(address = mpl_token_metadata::id())]
+    pub metadata_program: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
     #[account(mut)]
