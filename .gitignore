@@ -1,0 +1,9 @@
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+node_modules
+.history
+*.log
+.anchor/program-logs/test-ledger
+.vscode/settings.json
