@@ -6,7 +6,7 @@
 # Prerequisites:
 # - Docker installed and running correctly
 
-SOLANA_VERSION="1.14.7"
+SOLANA_VERSION="1.14.20"
 ANCHOR_VERSION="0.27.0"
 IMAGE_TAG="sallar:1.0"
 CONTAINER_NAME="sallar"

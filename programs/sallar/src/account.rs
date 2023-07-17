@@ -18,6 +18,8 @@ use anchor_lang::{
 /// * `top_block_balance` - amount of tokens left on the current top block to be distributed as the part of the block solution process,
 /// * `top_block_distribution_address` - the address of the top block distribution account,
 /// * `top_block_distribution_nonce` - the nonce of the top block distribution account,
+/// * `top_block_last_account_address` - address of the last account that participated in top block solving,
+/// * `top_block_last_account_rest_bp` - the number of BP that the last account - that participated in top block solving - did not receive due to too low amount of remaining BP on the block,
 ///
 /// * `bottom_block_number` - current bottom block number,
 /// * `bottom_block_available_bp` - the number of left bp for the current bottom block number (when bp is decreased to 0, then the current block is solved),
@@ -25,6 +27,8 @@ use anchor_lang::{
 /// * `bottom_block_balance` - amount of tokens left on the current bottom block to be distributed as the part of the block solution process,
 /// * `bottom_block_distribution_address` - the address of the bottom block distribution account,
 /// * `bottom_block_distribution_nonce` - the nonce of the bottom block distribution account,
+/// * `bottom_block_last_account_address` - address of the last account that participated in bottom block solving,
+/// * `bottom_block_last_account_rest_bp` - the number of BP that the last account - that participated in bottom block solving - did not receive due to too low amount of remaining BP on the block,
 ///
 /// * `final_staking_account_nonce` - the nonce of the final staking account,
 /// * `final_staking_pool_in_round` - prize pool (amount of tokens) to be distributed in the current final staking round,
@@ -49,6 +53,8 @@ pub struct BlocksState {
     pub top_block_balance: u64,
     pub top_block_distribution_address: Pubkey,
     pub top_block_distribution_nonce: u8,
+    pub top_block_last_account_address: Option<Pubkey>,
+    pub top_block_last_account_rest_bp: u64,
 
     pub bottom_block_number: u64,
     pub bottom_block_available_bp: u64,
@@ -56,6 +62,8 @@ pub struct BlocksState {
     pub bottom_block_balance: u64,
     pub bottom_block_distribution_address: Pubkey,
     pub bottom_block_distribution_nonce: u8,
+    pub bottom_block_last_account_address: Option<Pubkey>,
+    pub bottom_block_last_account_rest_bp: u64,
 
     pub final_staking_account_nonce: u8,
     pub final_staking_pool_in_round: u64,

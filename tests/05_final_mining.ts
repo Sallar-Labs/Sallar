@@ -96,7 +96,7 @@ describe("Sallar - Final mining", async () => {
                 } catch (error) {
                     assert.equal(
                         error.message,
-                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1778",
+                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1777",
                     );
 
                     return;
@@ -124,7 +124,7 @@ describe("Sallar - Final mining", async () => {
                 } catch (error) {
                     assert.equal(
                         error.message,
-                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1778",
+                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1777",
                     );
                 }
             });
@@ -159,7 +159,7 @@ describe("Sallar - Final mining", async () => {
                 } catch (error) {
                     assert.equal(
                         error.message,
-                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 1: custom program error: 0x1778",
+                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 1: custom program error: 0x1777",
                     );
 
                     return;
@@ -189,7 +189,7 @@ describe("Sallar - Final mining", async () => {
                 } catch (error) {
                     assert.equal(
                         error.message,
-                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1778",
+                        "failed to send transaction: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1777",
                     );
 
                     return;

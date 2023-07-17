@@ -1,17 +1,20 @@
-use anchor_lang::{prelude::{
-    require, Account, AccountInfo, Clock, CpiContext, Result, SolanaSysvar, ToAccountInfo,
-}, context, solana_program::program::invoke_signed};
+use anchor_lang::{
+    context,
+    prelude::{
+        require, Account, AccountInfo, Clock, CpiContext, Result, SolanaSysvar, ToAccountInfo,
+    },
+    solana_program::program::invoke_signed,
+};
 use anchor_spl::token::{self, Mint, MintTo, TokenAccount, Transfer};
 
 use mpl_token_metadata::instruction::create_metadata_accounts_v3;
 
 use crate::{
-    account::BlocksState, error::SallarError, token_math::calculate_max_bp,
-    token_math::DUSTS_PER_BLOCK, MINT_SEED, context as SallarContext
+    account::BlocksState, context as SallarContext, error::SallarError,
+    token_math::calculate_max_bp, token_math::DUSTS_PER_BLOCK, MINT_SEED,
 };
 use context::*;
 use SallarContext::InitializeContext;
-
 
 const MIN_BLOCKS_SOLUTION_INTERVAL_SECONDS: i64 = 180;
 const MIN_FINAL_STAKING_SOLUTION_INTERVAL_SECONDS: i64 = 72_000;
@@ -184,7 +187,10 @@ pub fn blocks_collided(state: &BlocksState) -> Result<()> {
 /// ### Returns
 /// An error if top block is solved (has no available BPs), otherwise a successful result.
 pub fn top_block_not_solved(state: &BlocksState) -> Result<()> {
-    require!(state.top_block_available_bp > 0, SallarError::BlockAlreadySolved);
+    require!(
+        state.top_block_available_bp > 0,
+        SallarError::BlockAlreadySolved
+    );
 
     Ok(())
 }
@@ -215,8 +221,14 @@ pub fn bottom_block_not_solved(state: &BlocksState) -> Result<()> {
 /// ### Returns
 /// An error if either top block or bottom is not solved (any of them has available BPs), otherwise a successful result.
 pub fn blocks_solved(state: &BlocksState) -> Result<()> {
-    require!(state.top_block_available_bp == 0, SallarError::TopBlockNotSolvedYet);
-    require!(state.bottom_block_available_bp == 0, SallarError::BottomBlockNotSolvedYet);
+    require!(
+        state.top_block_available_bp == 0,
+        SallarError::TopBlockNotSolvedYet
+    );
+    require!(
+        state.bottom_block_available_bp == 0,
+        SallarError::BottomBlockNotSolvedYet
+    );
 
     Ok(())
 }
@@ -247,7 +259,10 @@ pub fn update_blocks_collided(state: &mut BlocksState) -> Result<()> {
 /// ### Returns
 /// An error if the initial_token_distribution function has been already successfully executed, otherwise a successful result.
 pub fn initial_token_distribution_not_performed_yet(state: &BlocksState) -> Result<()> {
-    require!(!state.initial_token_distribution_already_performed, SallarError::InitialTokenDistributionAlreadyPerformed);
+    require!(
+        !state.initial_token_distribution_already_performed,
+        SallarError::InitialTokenDistributionAlreadyPerformed
+    );
 
     Ok(())
 }
@@ -305,7 +320,14 @@ pub fn switch_top_block_to_next_one_if_applicable<'a>(
         let authority = mint.to_account_info();
         let mint_token_account = mint.to_account_info();
 
-        mint_tokens(authority, distribution_top_block_account, mint_token_account, token_program, mint_nonce, DUSTS_PER_BLOCK)?;
+        mint_tokens(
+            authority,
+            distribution_top_block_account,
+            mint_token_account,
+            token_program,
+            mint_nonce,
+            DUSTS_PER_BLOCK,
+        )?;
 
         state.top_block_available_bp =
             convert_f64_to_u64_safely(calculate_max_bp(state.top_block_number)?)?;
@@ -356,7 +378,14 @@ pub fn switch_bottom_block_to_next_one_if_applicable<'a>(
         let authority = mint.to_account_info();
         let mint_token_account = mint.to_account_info();
 
-        mint_tokens(authority, distribution_bottom_block_account, mint_token_account, token_program, mint_nonce, DUSTS_PER_BLOCK)?;
+        mint_tokens(
+            authority,
+            distribution_bottom_block_account,
+            mint_token_account,
+            token_program,
+            mint_nonce,
+            DUSTS_PER_BLOCK,
+        )?;
 
         state.bottom_block_available_bp =
             convert_f64_to_u64_safely(calculate_max_bp(state.bottom_block_number)?)?;
@@ -379,6 +408,10 @@ pub fn switch_bottom_block_to_next_one_if_applicable<'a>(
 pub fn convert_f64_to_u64_safely(value: f64) -> Result<u64> {
     require!(value <= u64::MAX as f64, SallarError::U64ConversionError);
     require!(value >= u64::MIN as f64, SallarError::U64ConversionError);
+    require!(
+        value <= (1u64 << 53) as f64,
+        SallarError::U64ConversionError
+    );
 
     let value_u64 = value as u64;
     require!(
@@ -523,12 +556,28 @@ mod test {
                     "top_block_solution_timestamp",
                     &self.top_block_solution_timestamp,
                 )
+                .field(
+                    "top_block_last_account_address",
+                    &self.top_block_last_account_address,
+                )
+                .field(
+                    "top_block_last_account_rest_bp",
+                    &self.top_block_last_account_rest_bp,
+                )
                 .field("bottom_block_number", &self.bottom_block_number)
                 .field("bottom_block_balance", &self.bottom_block_balance)
                 .field("bottom_block_available_bp", &self.bottom_block_available_bp)
                 .field(
                     "bottom_block_solution_timestamp",
                     &self.bottom_block_solution_timestamp,
+                )
+                .field(
+                    "bottom_block_last_account_address",
+                    &self.bottom_block_last_account_address,
+                )
+                .field(
+                    "bottom_block_last_account_rest_bp",
+                    &self.bottom_block_last_account_rest_bp,
                 )
                 .field("blocks_collided", &self.blocks_collided)
                 .field(
@@ -548,10 +597,14 @@ mod test {
                 top_block_balance: 0,
                 top_block_available_bp: 0,
                 top_block_solution_timestamp: 0,
+                top_block_last_account_address: Some(Pubkey::new_unique()),
+                top_block_last_account_rest_bp: 0,
                 bottom_block_number: 0,
                 bottom_block_balance: 0,
                 bottom_block_available_bp: 0,
                 bottom_block_solution_timestamp: 0,
+                bottom_block_last_account_address: Some(Pubkey::new_unique()),
+                bottom_block_last_account_rest_bp: 0,
                 blocks_collided: false,
                 initial_token_distribution_already_performed: false,
                 authority: Pubkey::new_unique(),
@@ -804,12 +857,38 @@ mod test {
 
     #[test]
     fn test_convert_f64_to_u64_safely_valid() {
+        assert_eq!(
+            convert_f64_to_u64_safely((1u64 << 53) as f64 - 5.0),
+            Ok((1u64 << 53) - 5)
+        );
         assert_eq!(convert_f64_to_u64_safely(123.0), Ok(123));
         assert_eq!(convert_f64_to_u64_safely(0.0), Ok(0));
+        assert_eq!(convert_f64_to_u64_safely((u64::MIN) as f64), Ok(0));
     }
 
     #[test]
     fn test_convert_f64_to_u64_safely_invalid() {
+        assert_eq!(
+            convert_f64_to_u64_safely(288230376151711744.0),
+            err!(SallarError::U64ConversionError)
+        );
+        assert_eq!(
+            convert_f64_to_u64_safely(f64::MAX),
+            err!(SallarError::U64ConversionError)
+        );
+        assert_eq!(
+            convert_f64_to_u64_safely(f64::MIN),
+            err!(SallarError::U64ConversionError)
+        );
+        assert_eq!(
+            convert_f64_to_u64_safely(f64::MAX + 1.0),
+            err!(SallarError::U64ConversionError)
+        );
+        assert_eq!(
+            convert_f64_to_u64_safely(f64::MIN - 1.0),
+            err!(SallarError::U64ConversionError)
+        );
+
         assert_eq!(
             convert_f64_to_u64_safely(-123.0),
             err!(SallarError::U64ConversionError)

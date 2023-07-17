@@ -16,7 +16,7 @@ pub mod error;
 pub mod token_math;
 pub mod utils;
 
-const FINAL_STAKING_ACCOUNT_BALANCE_PART_FOR_STAKING: f64 = 0.001;
+const FINAL_STAKING_ACCOUNT_BALANCE_PART_FOR_STAKING_DIVISION_FACTOR: u64 = 1000;
 
 /// set seeds for pda accounts
 const MINT_SEED: &str = "sallar";
@@ -34,7 +34,7 @@ pub mod sallar {
     use error::SallarError;
     use token_math::{
         calculate_bottom_bp_with_boost, calculate_bottom_bp_without_boost, calculate_dust_per_bp,
-        calculate_max_bp, calculate_top_bp_with_boost,
+        calculate_max_bp, calculate_single_reward, calculate_top_bp_with_boost,
         calculate_user_reward_bottom_block, calculate_user_reward_top_block, DUSTS_PER_BLOCK,
         TOKEN_AMOUNT_SCALING_FACTOR,
     };
@@ -42,7 +42,7 @@ pub mod sallar {
         blocks_collided, blocks_solution_required_interval_elapsed, blocks_solved,
         bottom_block_not_solved, convert_f64_to_u64_safely, convert_u64_to_f64_safely,
         final_staking_required_interval_elapsed, initial_token_distribution_not_performed_yet,
-        mint_tokens, switch_bottom_block_to_next_one_if_applicable, set_token_metadata,
+        mint_tokens, set_token_metadata, switch_bottom_block_to_next_one_if_applicable,
         switch_top_block_to_next_one_if_applicable, top_block_not_solved, transfer_tokens,
         update_blocks_collided, valid_owner, valid_signer,
     };
@@ -66,8 +66,7 @@ pub mod sallar {
         token_metadata_uri: String,
     ) -> Result<()> {
         let program_id = id();
-        let (_, mint_nonce) =
-            Pubkey::find_program_address(&[MINT_SEED.as_bytes()], &program_id);
+        let (_, mint_nonce) = Pubkey::find_program_address(&[MINT_SEED.as_bytes()], &program_id);
         let (_, blocks_state_nonce) =
             Pubkey::find_program_address(&[BLOCKS_STATE_SEED.as_bytes()], &program_id);
         let (_, top_block_nonce) =
@@ -84,25 +83,51 @@ pub mod sallar {
         blocks_state.mint_nonce = mint_nonce;
         blocks_state.block_state_nonce = blocks_state_nonce;
 
-        blocks_state.top_block_distribution_address = ctx.accounts.distribution_top_block_account.key();
+        blocks_state.top_block_distribution_address =
+            ctx.accounts.distribution_top_block_account.key();
         blocks_state.top_block_distribution_nonce = top_block_nonce;
         blocks_state.top_block_solution_timestamp = 0;
         blocks_state.top_block_number = 1_u64;
+        blocks_state.top_block_last_account_address = None;
+        blocks_state.top_block_last_account_rest_bp = 0;
 
-        blocks_state.top_block_available_bp = convert_f64_to_u64_safely(calculate_max_bp(blocks_state.top_block_number)?)?;
+        blocks_state.top_block_available_bp =
+            convert_f64_to_u64_safely(calculate_max_bp(blocks_state.top_block_number)?)?;
         blocks_state.top_block_balance = DUSTS_PER_BLOCK;
 
-        mint_tokens(ctx.accounts.mint.to_account_info(), ctx.accounts.distribution_top_block_account.to_account_info(), ctx.accounts.mint.to_account_info(), ctx.accounts.token_program.to_account_info(), mint_nonce, DUSTS_PER_BLOCK)?;
+        mint_tokens(
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts
+                .distribution_top_block_account
+                .to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            mint_nonce,
+            DUSTS_PER_BLOCK,
+        )?;
 
-        blocks_state.bottom_block_distribution_address = ctx.accounts.distribution_bottom_block_account.key();
+        blocks_state.bottom_block_distribution_address =
+            ctx.accounts.distribution_bottom_block_account.key();
         blocks_state.bottom_block_distribution_nonce = bottom_block_nonce;
         blocks_state.bottom_block_solution_timestamp = 0;
         blocks_state.bottom_block_number = 2_600_000_u64;
+        blocks_state.bottom_block_last_account_address = None;
+        blocks_state.bottom_block_last_account_rest_bp = 0;
 
-        blocks_state.bottom_block_available_bp = convert_f64_to_u64_safely(calculate_max_bp(blocks_state.bottom_block_number)?)?;
+        blocks_state.bottom_block_available_bp =
+            convert_f64_to_u64_safely(calculate_max_bp(blocks_state.bottom_block_number)?)?;
         blocks_state.bottom_block_balance = DUSTS_PER_BLOCK;
 
-        mint_tokens(ctx.accounts.mint.to_account_info(), ctx.accounts.distribution_bottom_block_account.to_account_info(), ctx.accounts.mint.to_account_info(), ctx.accounts.token_program.to_account_info(), mint_nonce, DUSTS_PER_BLOCK)?;
+        mint_tokens(
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts
+                .distribution_bottom_block_account
+                .to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            mint_nonce,
+            DUSTS_PER_BLOCK,
+        )?;
 
         blocks_state.initial_token_distribution_already_performed = false;
         blocks_state.blocks_collided = false;
@@ -115,7 +140,12 @@ pub mod sallar {
 
         blocks_state.final_mining_account_nonce = final_mining_account_nonce;
 
-        set_token_metadata(ctx, token_metadata_name, token_metadata_symbol, token_metadata_uri)
+        set_token_metadata(
+            ctx,
+            token_metadata_name,
+            token_metadata_symbol,
+            token_metadata_uri,
+        )
     }
 
     /// Distributes 2 600 000 000 tokens to the organization account provided in the context by minting tokens to the account.
@@ -129,7 +159,14 @@ pub mod sallar {
         let blocks_state = &mut ctx.accounts.blocks_state_account;
         let mint_nonce = blocks_state.mint_nonce;
 
-        mint_tokens(ctx.accounts.mint.to_account_info(), ctx.accounts.organization_account.to_account_info(), ctx.accounts.mint.to_account_info(), ctx.accounts.token_program.to_account_info(), mint_nonce, 260_000_000_000_000_u64 * TOKEN_AMOUNT_SCALING_FACTOR)?;
+        mint_tokens(
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.organization_account.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            mint_nonce,
+            260_000_000_000_000_u64 * TOKEN_AMOUNT_SCALING_FACTOR,
+        )?;
 
         blocks_state.initial_token_distribution_already_performed = true;
 
@@ -155,6 +192,7 @@ pub mod sallar {
         users_info: Vec<UserInfoTopBlock>,
     ) -> Result<u64> {
         require!(!&users_info.is_empty(), SallarError::MissingUserInfo);
+        let first_user_info_key = users_info.first().unwrap().user_public_key;
         let blocks_state = &mut ctx.accounts.blocks_state_account;
         let block_number = blocks_state.top_block_number;
         let mint_nonce = blocks_state.mint_nonce;
@@ -162,7 +200,64 @@ pub mod sallar {
         let top_bp_with_boost = calculate_top_bp_with_boost(block_number)?;
         let dust_per_bp = calculate_dust_per_bp(block_number)?;
 
-        for user_info in &users_info {
+        let has_unprocessed_rest_from_last_block = blocks_state.top_block_last_account_rest_bp > 0;
+        if has_unprocessed_rest_from_last_block {
+            require!(
+                blocks_state.top_block_balance == DUSTS_PER_BLOCK,
+                SallarError::UserRestExistsButBlockIsNotNew
+            );
+            require!(
+                first_user_info_key == blocks_state.top_block_last_account_address.unwrap(),
+                SallarError::UserRestExistsButFirstRequestForNewBlockIsNotForThisAccount
+            );
+
+            let account = ctx.remaining_accounts.iter().find(|account| {
+                account.key() == blocks_state.top_block_last_account_address.unwrap()
+            });
+            let account_info = match account {
+                Some(acc) => acc.to_account_info(),
+                None => {
+                    return err!(
+                        SallarError::UserRestExistsButFirstRequestForNewBlockMissedTheAccount
+                    )
+                }
+            };
+
+            let user_rest_bp = blocks_state
+                .top_block_last_account_rest_bp
+                .min(blocks_state.top_block_available_bp);
+            let user_rest_transfer_amount: u64;
+            if user_rest_bp < blocks_state.top_block_available_bp {
+                user_rest_transfer_amount = calculate_single_reward(user_rest_bp, dust_per_bp)?;
+            } else {
+                user_rest_transfer_amount = blocks_state.top_block_balance;
+            }
+
+            transfer_tokens(
+                &ctx.accounts.distribution_top_block_account,
+                account_info,
+                DISTRIBUTION_TOP_BLOCK_SEED,
+                ctx.accounts.token_program.to_account_info(),
+                blocks_state.top_block_distribution_nonce,
+                user_rest_transfer_amount,
+            )?;
+
+            blocks_state.top_block_available_bp =
+                blocks_state.top_block_available_bp - user_rest_bp;
+            blocks_state.top_block_last_account_rest_bp =
+                blocks_state.top_block_last_account_rest_bp - user_rest_bp;
+            blocks_state.top_block_balance =
+                blocks_state.top_block_balance - user_rest_transfer_amount;
+        }
+        let users_info_without_info_for_user_rest = match has_unprocessed_rest_from_last_block {
+            true => users_info
+                .into_iter()
+                .skip(1)
+                .collect::<Vec<UserInfoTopBlock>>(),
+            false => users_info,
+        };
+
+        for user_info in &users_info_without_info_for_user_rest {
             require!(
                 blocks_state.top_block_available_bp > 0,
                 SallarError::UserRequestForSolvedBlock
@@ -186,8 +281,11 @@ pub mod sallar {
                 )?;
 
             if current_user_reward_bp <= blocks_state.top_block_available_bp {
+                blocks_state.top_block_last_account_rest_bp = 0;
                 blocks_state.top_block_available_bp -= current_user_reward_bp;
             } else {
+                blocks_state.top_block_last_account_rest_bp =
+                    current_user_reward_bp - blocks_state.top_block_available_bp;
                 blocks_state.top_block_available_bp = 0;
             }
 
@@ -205,9 +303,18 @@ pub mod sallar {
             )?;
 
             blocks_state.top_block_balance -= current_user_transfer_amount;
+            blocks_state.top_block_last_account_address = Some(user_info.user_public_key);
         }
 
-        switch_top_block_to_next_one_if_applicable(blocks_state, mint_nonce, &ctx.accounts.mint, ctx.accounts.distribution_top_block_account.to_account_info(), ctx.accounts.token_program.to_account_info())?;
+        switch_top_block_to_next_one_if_applicable(
+            blocks_state,
+            mint_nonce,
+            &ctx.accounts.mint,
+            ctx.accounts
+                .distribution_top_block_account
+                .to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+        )?;
         update_blocks_collided(blocks_state)?;
 
         Ok(blocks_state.top_block_number)
@@ -232,6 +339,7 @@ pub mod sallar {
         users_info: Vec<UserInfoBottomBlock>,
     ) -> Result<u64> {
         require!(!&users_info.is_empty(), SallarError::MissingUserInfo);
+        let first_user_info_key = users_info.first().unwrap().user_public_key;
         let blocks_state = &mut ctx.accounts.blocks_state_account;
         let block_number = blocks_state.bottom_block_number;
         let mint_nonce = blocks_state.mint_nonce;
@@ -241,7 +349,65 @@ pub mod sallar {
 
         let dust_per_bp = calculate_dust_per_bp(block_number)?;
 
-        for user_info in &users_info {
+        let has_unprocessed_rest_from_last_block =
+            blocks_state.bottom_block_last_account_rest_bp > 0;
+        if has_unprocessed_rest_from_last_block {
+            require!(
+                blocks_state.bottom_block_balance == DUSTS_PER_BLOCK,
+                SallarError::UserRestExistsButBlockIsNotNew
+            );
+            require!(
+                first_user_info_key == blocks_state.bottom_block_last_account_address.unwrap(),
+                SallarError::UserRestExistsButFirstRequestForNewBlockIsNotForThisAccount
+            );
+
+            let account = ctx.remaining_accounts.iter().find(|account| {
+                account.key() == blocks_state.bottom_block_last_account_address.unwrap()
+            });
+            let account_info = match account {
+                Some(acc) => acc.to_account_info(),
+                None => {
+                    return err!(
+                        SallarError::UserRestExistsButFirstRequestForNewBlockMissedTheAccount
+                    )
+                }
+            };
+
+            let user_rest_bp = blocks_state
+                .bottom_block_last_account_rest_bp
+                .min(blocks_state.bottom_block_available_bp);
+            let user_rest_transfer_amount: u64;
+            if user_rest_bp < blocks_state.bottom_block_available_bp {
+                user_rest_transfer_amount = calculate_single_reward(user_rest_bp, dust_per_bp)?;
+            } else {
+                user_rest_transfer_amount = blocks_state.bottom_block_balance;
+            }
+
+            transfer_tokens(
+                &ctx.accounts.distribution_bottom_block_account,
+                account_info,
+                DISTRIBUTION_BOTTOM_BLOCK_SEED,
+                ctx.accounts.token_program.to_account_info(),
+                blocks_state.bottom_block_distribution_nonce,
+                user_rest_transfer_amount,
+            )?;
+
+            blocks_state.bottom_block_available_bp =
+                blocks_state.bottom_block_available_bp - user_rest_bp;
+            blocks_state.bottom_block_last_account_rest_bp =
+                blocks_state.bottom_block_last_account_rest_bp - user_rest_bp;
+            blocks_state.bottom_block_balance =
+                blocks_state.bottom_block_balance - user_rest_transfer_amount;
+        }
+        let users_info_without_info_for_user_rest = match has_unprocessed_rest_from_last_block {
+            true => users_info
+                .into_iter()
+                .skip(1)
+                .collect::<Vec<UserInfoBottomBlock>>(),
+            false => users_info,
+        };
+
+        for user_info in &users_info_without_info_for_user_rest {
             require!(
                 blocks_state.bottom_block_available_bp > 0,
                 SallarError::UserRequestForSolvedBlock
@@ -271,8 +437,11 @@ pub mod sallar {
                 )?;
 
             if current_user_reward_bp <= blocks_state.bottom_block_available_bp {
+                blocks_state.bottom_block_last_account_rest_bp = 0;
                 blocks_state.bottom_block_available_bp -= current_user_reward_bp;
             } else {
+                blocks_state.bottom_block_last_account_rest_bp =
+                    current_user_reward_bp - blocks_state.bottom_block_available_bp;
                 blocks_state.bottom_block_available_bp = 0;
             }
 
@@ -290,9 +459,18 @@ pub mod sallar {
             )?;
 
             blocks_state.bottom_block_balance -= current_user_transfer_amount;
+            blocks_state.bottom_block_last_account_address = Some(user_info.user_public_key);
         }
 
-        switch_bottom_block_to_next_one_if_applicable(blocks_state, mint_nonce, &ctx.accounts.mint, ctx.accounts.distribution_bottom_block_account.to_account_info(), ctx.accounts.token_program.to_account_info())?;
+        switch_bottom_block_to_next_one_if_applicable(
+            blocks_state,
+            mint_nonce,
+            &ctx.accounts.mint,
+            ctx.accounts
+                .distribution_bottom_block_account
+                .to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+        )?;
         update_blocks_collided(blocks_state)?;
 
         Ok(blocks_state.bottom_block_number)
@@ -311,10 +489,14 @@ pub mod sallar {
         ctx: Context<'_, '_, '_, 'info, FinalMiningContext<'info>>,
         users_info: Vec<UserInfoFinalMining>,
     ) -> Result<()> {
+        require!(!users_info.is_empty(), SallarError::MissingUserInfo);
         let blocks_state = &mut ctx.accounts.blocks_state_account;
 
         for account in ctx.remaining_accounts.iter() {
-            let user_find_result = users_info.iter().filter(|user_info| user_info.user_public_key == account.key()).collect::<Vec<&UserInfoFinalMining>>();
+            let user_find_result = users_info
+                .iter()
+                .filter(|user_info| user_info.user_public_key == account.key())
+                .collect::<Vec<&UserInfoFinalMining>>();
 
             require!(
                 user_find_result.len() > 0,
@@ -367,20 +549,23 @@ pub mod sallar {
             let final_staking_account_balance = convert_u64_to_f64_safely(
                 token::accessor::amount(&ctx.accounts.final_staking_account.to_account_info())?,
             )?;
-            blocks_state.final_staking_pool_in_round = convert_f64_to_u64_safely(
-                final_staking_account_balance * (FINAL_STAKING_ACCOUNT_BALANCE_PART_FOR_STAKING),
-            )?;
+            blocks_state.final_staking_pool_in_round =
+                convert_f64_to_u64_safely(final_staking_account_balance)?
+                    / FINAL_STAKING_ACCOUNT_BALANCE_PART_FOR_STAKING_DIVISION_FACTOR;
 
             require!(
                 blocks_state.final_staking_pool_in_round > 0,
                 SallarError::FinalStakingPoolInRoundIsEmpty
             );
 
-            blocks_state.final_staking_left_balance_in_round = blocks_state.final_staking_pool_in_round;
+            blocks_state.final_staking_left_balance_in_round =
+                blocks_state.final_staking_pool_in_round;
             blocks_state.final_staking_left_reward_parts_in_round = 1.0;
         }
 
-        users_info.iter().for_each(|user_info| total_users_reward_part += user_info.reward_part);
+        users_info
+            .iter()
+            .for_each(|user_info| total_users_reward_part += user_info.reward_part);
 
         require!(
             total_users_reward_part <= 1.0,
@@ -390,7 +575,10 @@ pub mod sallar {
         let mut current_user_transfer_amount;
 
         for account in ctx.remaining_accounts.iter() {
-            let user_find_result = users_info.iter().filter(|user_info| user_info.user_public_key == account.key()).collect::<Vec<&UserInfoFinalStaking>>();
+            let user_find_result = users_info
+                .iter()
+                .filter(|user_info| user_info.user_public_key == account.key())
+                .collect::<Vec<&UserInfoFinalStaking>>();
 
             require!(
                 user_find_result.len() > 0,
@@ -412,14 +600,11 @@ pub mod sallar {
                 );
 
                 if reward_parts_pool_after_user == 0.0 {
-                    current_user_transfer_amount =
-                        blocks_state.final_staking_left_balance_in_round;
+                    current_user_transfer_amount = blocks_state.final_staking_left_balance_in_round;
                 } else {
                     current_user_transfer_amount = convert_f64_to_u64_safely(
                         user_sub_info.reward_part
-                            * convert_u64_to_f64_safely(
-                                blocks_state.final_staking_pool_in_round,
-                            )?,
+                            * convert_u64_to_f64_safely(blocks_state.final_staking_pool_in_round)?,
                     )?;
                 }
 
@@ -445,8 +630,7 @@ pub mod sallar {
         }
 
         if blocks_state.final_staking_left_balance_in_round == 0 {
-            blocks_state.final_staking_last_staking_timestamp =
-                Clock::get()?.unix_timestamp;
+            blocks_state.final_staking_last_staking_timestamp = Clock::get()?.unix_timestamp;
         }
 
         Ok(())
@@ -571,8 +755,10 @@ mod test {
         let metadata_seed1 = "metadata".as_bytes();
         let metadata_seed2 = &mpl_token_metadata::id().to_bytes();
         let metadata_seed3 = &mint_pda.to_bytes();
-        let (metadata_pda, _) =
-            Pubkey::find_program_address(&[metadata_seed1, metadata_seed2, metadata_seed3], &mpl_token_metadata::id());
+        let (metadata_pda, _) = Pubkey::find_program_address(
+            &[metadata_seed1, metadata_seed2, metadata_seed3],
+            &mpl_token_metadata::id(),
+        );
 
         let token_program = spl_token::id();
         let signer = payer.pubkey();
@@ -598,7 +784,7 @@ mod test {
             final_staking_account: final_staking_account_pda,
             final_mining_account: final_mining_account_pda,
             metadata_pda,
-            metadata_program: mpl_token_metadata::id()
+            metadata_program: mpl_token_metadata::id(),
         };
 
         let mut transaction = Transaction::new_with_payer(
@@ -665,12 +851,8 @@ mod test {
     async fn test_initialize() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
-        
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
 
         program_test.prefer_bpf(true);
 
@@ -686,12 +868,8 @@ mod test {
     async fn test_initial_token_distribution() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
-        
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -699,7 +877,7 @@ mod test {
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
             .await
             .unwrap();
-        
+
         let (mint_pda, _) = Pubkey::find_program_address(&[MINT_SEED.as_bytes()], &program_id);
         let organization_account =
             create_token_account(&mut banks_client, &payer, recent_blockhash, mint_pda)
@@ -875,11 +1053,7 @@ mod test {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -925,11 +1099,7 @@ mod test {
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(5000000);
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let mut program_test_context = program_test.start_with_context().await;
@@ -997,12 +1167,8 @@ mod test {
     async fn test_fail_solve_top_block() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
-        
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -1033,11 +1199,7 @@ mod test {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -1072,11 +1234,7 @@ mod test {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -1106,7 +1264,7 @@ mod test {
             assert_eq!(user_account_data.amount, 2000000000000);
         }
     }
-    
+
     #[cfg(feature = "bpf-tests")]
     #[tokio::test]
     async fn test_solve_bottom_block_two_blocks() {
@@ -1114,11 +1272,7 @@ mod test {
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(5000000);
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let mut program_test_context = program_test.start_with_context().await;
@@ -1180,11 +1334,7 @@ mod test {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -1294,11 +1444,7 @@ mod test {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
@@ -1389,11 +1535,7 @@ mod test {
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(500000);
 
-        program_test.add_program(
-            "mpl_token_metadata",
-            mpl_token_metadata::id(),
-            None,
-        );
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
         program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;

@@ -5,7 +5,7 @@ The documentation can be found here: https://docs.sallar.io/sallar-smart-contrac
 Sallar requires some dependencies to be built and deployed.
 
 Dependencies required to build and deploy Sallar program:
-- Rust 1.6 or higher
+- Rust 1.66 or higher
 - Solana CLI 1.14.7
 - Anchor 0.27.0
 

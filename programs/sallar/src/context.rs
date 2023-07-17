@@ -5,7 +5,7 @@ use anchor_lang::{
         Program, Pubkey, Rent, Signer, SolanaSysvar, System, ToAccountInfo,
     },
     solana_program::system_program,
-    Id,
+    Id, Space,
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use mpl_token_metadata;
@@ -18,35 +18,6 @@ use crate::{
 /// The discriminator is defined by the first 8 bytes of the SHA256 hash of the account's Rust identifier.
 /// It includes the name of struct type and lets Anchor know what type of account it should deserialize the data as.
 const DISCRIMINATOR_LENGTH: usize = 8;
-
-const AUTHORITY_PUBLIC_KEY_LENGTH: usize = 32;
-const BLOCK_STATE_NONCE_LENGTH: usize = 1;
-const MINT_NONCE_LENGTH: usize = 1;
-
-const INITIAL_TOKEN_DISTRIBUTION_ALREADY_PERFORMED_LENGTH: usize = 1;
-const BLOCKS_COLLIDED_LENGTH: usize = 1;
-
-const TOP_BLOCK_NUMBER_LENGTH: usize = 8;
-const TOP_BLOCK_AVAILABLE_BP_LENGTH: usize = 8;
-const TOP_BLOCK_SOLUTION_TIMESTAMP_LENGTH: usize = 8;
-const TOP_BLOCK_BALANCE_LENGTH: usize = 8;
-const TOP_BLOCK_DISTRIBUTION_ADDRESS_LENGTH: usize = 32;
-const TOP_BLOCK_DISTRIBUTION_NONCE_LENGTH: usize = 1;
-
-const BOTTOM_BLOCK_NUMBER_LENGTH: usize = 8;
-const BOTTOM_BLOCK_AVAILABLE_BP_LENGTH: usize = 8;
-const BOTTOM_BLOCK_SOLUTION_TIMESTAMP_LENGTH: usize = 8;
-const BOTTOM_BLOCK_BALANCE_LENGTH: usize = 8;
-const BOTTOM_BLOCK_DISTRIBUTION_ADDRESS_LENGTH: usize = 32;
-const BOTTOM_BLOCK_DISTRIBUTION_NONCE_LENGTH: usize = 1;
-
-const FINAL_STAKING_ACCOUNT_NONCE_LENGTH: usize = 1;
-const FINAL_STAKING_POOL_IN_ROUND_LENGTH: usize = 8;
-const FINAL_STAKING_LAST_STAKING_TIMESTAMP_LENGTH: usize = 8;
-const FINAL_STAKING_ACCOUNT_BALANCE_LENGTH: usize = 8;
-const FINAL_STAKING_REWARD_PARTS_POOL_LENGTH: usize = 8;
-
-const FINAL_MINING_ACCOUNT_NONCE_LENGTH: usize = 1;
 
 /// Context for the initialize instruction.
 ///
@@ -68,7 +39,7 @@ const FINAL_MINING_ACCOUNT_NONCE_LENGTH: usize = 1;
 #[derive(Accounts)]
 #[instruction(bump: u8)]
 pub struct InitializeContext<'info> {
-    #[account(init, payer = signer, space = InitializeContext::BLOCKS_STATE_LENGTH, seeds = [BLOCKS_STATE_SEED.as_bytes()], bump)]
+    #[account(init, payer = signer, space = DISCRIMINATOR_LENGTH + BlocksState::INIT_SPACE, seeds = [BLOCKS_STATE_SEED.as_bytes()], bump)]
     pub blocks_state_account: Box<Account<'info, BlocksState>>,
 
     /// Decimals are set to 8 because it is the highest possible precision,
@@ -142,39 +113,6 @@ pub struct InitializeContext<'info> {
     pub signer: Signer<'info>,
     #[account(address = system_program::ID)]
     pub system_program: Program<'info, System>,
-}
-
-impl<'info> InitializeContext<'info> {
-    const BLOCKS_STATE_LENGTH: usize =
-    DISCRIMINATOR_LENGTH
-    + AUTHORITY_PUBLIC_KEY_LENGTH
-    + BLOCK_STATE_NONCE_LENGTH
-    + MINT_NONCE_LENGTH
-    
-    + INITIAL_TOKEN_DISTRIBUTION_ALREADY_PERFORMED_LENGTH
-    + BLOCKS_COLLIDED_LENGTH
-    
-    + TOP_BLOCK_NUMBER_LENGTH
-    + TOP_BLOCK_AVAILABLE_BP_LENGTH
-    + TOP_BLOCK_SOLUTION_TIMESTAMP_LENGTH
-    + TOP_BLOCK_BALANCE_LENGTH
-    + TOP_BLOCK_DISTRIBUTION_ADDRESS_LENGTH
-    + TOP_BLOCK_DISTRIBUTION_NONCE_LENGTH
-    
-    + BOTTOM_BLOCK_NUMBER_LENGTH
-    + BOTTOM_BLOCK_AVAILABLE_BP_LENGTH
-    + BOTTOM_BLOCK_SOLUTION_TIMESTAMP_LENGTH
-    + BOTTOM_BLOCK_BALANCE_LENGTH
-    + BOTTOM_BLOCK_DISTRIBUTION_ADDRESS_LENGTH
-    + BOTTOM_BLOCK_DISTRIBUTION_NONCE_LENGTH
-    
-    + FINAL_STAKING_ACCOUNT_NONCE_LENGTH
-    + FINAL_STAKING_POOL_IN_ROUND_LENGTH
-    + FINAL_STAKING_LAST_STAKING_TIMESTAMP_LENGTH
-    + FINAL_STAKING_ACCOUNT_BALANCE_LENGTH
-    + FINAL_STAKING_REWARD_PARTS_POOL_LENGTH
-
-    + FINAL_MINING_ACCOUNT_NONCE_LENGTH;
 }
 
 /// Context for the initial_token_distribution instruction.

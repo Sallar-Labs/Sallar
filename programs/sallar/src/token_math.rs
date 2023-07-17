@@ -1,8 +1,6 @@
 use anchor_lang::error::Error;
 
-use crate::utils::{
-    convert_f64_to_u64_safely, convert_u64_to_f64_safely,
-};
+use crate::utils::{convert_f64_to_u64_safely, convert_u64_to_f64_safely};
 
 /// In this module for numerical calculations, we have carefully considered the appropriate data types to use for different types of calculations.
 /// To ensure accurate and efficient computations, we have employed a strategy that utilizes f64 for non-financial calculations and u64 for financial calculations.
@@ -143,8 +141,8 @@ fn calculate_user_reward(
 ) -> Result<(u64, u64), Error> {
     let amount_without_boost = (user_request_without_boost as u64)
         * calculate_single_reward(parts_without_boost, dust_per_bp)?;
-    let amount_with_boost = (user_request_with_boost as u64)
-        * calculate_single_reward(parts_with_boost, dust_per_bp)?;
+    let amount_with_boost =
+        (user_request_with_boost as u64) * calculate_single_reward(parts_with_boost, dust_per_bp)?;
 
     let total_bp = ((user_request_without_boost as u64) * parts_without_boost)
         + ((user_request_with_boost as u64) * parts_with_boost);

@@ -9,38 +9,40 @@ pub enum SallarError {
     BlockSolutionAheadOfTime = 1,
     #[msg("Required time interval between final staking not passed (3 minutes).")]
     FinalStakingAheadOfTime = 2,
-    #[msg("Required time interval between final mining not passed (3 minutes).")]
-    FinalMiningAheadOfTime = 3,
     #[msg("Block already solved")]
-    BlockAlreadySolved = 4,
+    BlockAlreadySolved = 3,
     #[msg("Top block not solved yet")]
-    TopBlockNotSolvedYet = 5,
+    TopBlockNotSolvedYet = 4,
     #[msg("Bottom block not solved yet")]
-    BottomBlockNotSolvedYet = 6,
+    BottomBlockNotSolvedYet = 5,
     #[msg("Initial token distribution already performed")]
-    InitialTokenDistributionAlreadyPerformed = 7,
+    InitialTokenDistributionAlreadyPerformed = 6,
     #[msg("Blocks not collided yet")]
-    BlocksNotCollidedYet = 8,
+    BlocksNotCollidedYet = 7,
     #[msg("Final staking pool in round is empty")]
-    FinalStakingPoolInRoundIsEmpty = 9,
+    FinalStakingPoolInRoundIsEmpty = 8,
     #[msg("Missing user info")]
-    MissingUserInfo = 10,
+    MissingUserInfo = 9,
     #[msg("User request received for solved block")]
-    UserRequestForSolvedBlock = 11,
+    UserRequestForSolvedBlock = 10,
+    #[msg("Last account did not receive all BPs but the current block is not a new one")]
+    UserRestExistsButBlockIsNotNew = 11,
+    #[msg("Last account did not receive all BPs but the first user info for a new block is not this account")]
+    UserRestExistsButFirstRequestForNewBlockIsNotForThisAccount = 12,
+    #[msg("Last account did not receive all BPs but the first call to solve block for a new block does not contain this account")]
+    UserRestExistsButFirstRequestForNewBlockMissedTheAccount = 13,
     #[msg("User request exceeds available reward parts")]
-    UserRequestExceedsAvailableRewardParts = 12,
+    UserRequestExceedsAvailableRewardParts = 14,
     #[msg("Account from remaining accounts not found in user info")]
-    MismatchBetweenRemainingAccountsAndUserInfo = 13,
+    MismatchBetweenRemainingAccountsAndUserInfo = 15,
     #[msg("Sum of user reward parts exceeds 1")]
-    UserRewardPartsSumTooHigh = 14,
+    UserRewardPartsSumTooHigh = 16,
     #[msg("Lack of funds to pay the reward")]
-    LackOfFundsToPayTheReward = 15,
+    LackOfFundsToPayTheReward = 17,
     #[msg("Mismatch between available block BP and balance")]
-    MismatchBetweenAvailableBlockBPAndBalance = 16,
+    MismatchBetweenAvailableBlockBPAndBalance = 18,
     #[msg("F64 conversion error occurred")]
-    F64ConversionError = 17,
-    #[msg("U32 conversion error occurred")]
-    U32ConversionError = 18,
+    F64ConversionError = 19,
     #[msg("U64 conversion error occurred")]
-    U64ConversionError = 19,
+    U64ConversionError = 20,
 }

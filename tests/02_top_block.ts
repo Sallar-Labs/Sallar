@@ -303,7 +303,7 @@ describe("Sallar - top block", async () => {
                         assert.fail("Transaction succeeded but was expected to fail");
 
                 } catch (error) {  
-					assert.equal(error.message, 'failed to send transaction: Transaction simulation failed: Error processing Instruction 1: custom program error: 0x177b');
+					assert.equal(error.message, 'failed to send transaction: Transaction simulation failed: Error processing Instruction 1: custom program error: 0x177a');
                     return;
                 }
             });
