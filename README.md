@@ -58,7 +58,7 @@ Execute below commands in the environment where you set up the dependencies ment
 - Use Solana airdrop to generate some Solana tokens on the test validator: `solana airdrop 10000000000 --keypair ~/.config/solana/id.json --url http://localhost:8899` (generates 100 tokens)
 - Deploy Sallar (it's deployed to test Solana validator by default): `anchor deploy`
 - Run tests in Rust for Sallar: `cargo-test-sbf --features bpf-tests --arch bpf`
-- Run tests in TypeScript for Sallar: `anchor test`
+- Run tests in TypeScript for Sallar: `anchor run allTests`
 
 # Project Structure 
 The project structure is based on the standard Anchor's template which is composed of contracts, tests, and deploy instructions. The template provides a great starting point for developers to quickly get up and running and deploying smart contracts on the Solana blockchain.
@@ -127,7 +127,8 @@ We also didn't find any alternative tools for code coverage that would work with
 Use the following commands to run tests:
 - All Rust tests (all tests): `cargo-test-sbf --features bpf-tests --arch bpf`
 - Unit Rust tests (skips tests using `solana-program-test` crate): `cargo test` or `cargo-test-sbf --arch bpf`
-- TypeScript tests: `anchor test`
+- All TypeScript tests: `anchor run allTests` (execute all test suites)
+- Basic TypeScript tests: `anchor test` (executes only "basic" test suite)
 
 ## Extended scope of Sallar math tests
 It is possible to extend the scope of unit tests for `token_math.rs` file. Tests for this file use CSV files placed in the following directories:

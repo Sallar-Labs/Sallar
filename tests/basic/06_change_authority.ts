@@ -1,8 +1,8 @@
-import { Sallar } from "../target/types/sallar";
+import { Sallar } from "../../target/types/sallar";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
-import { findProgramAddress } from "./utils/pda";
+import { findProgramAddress } from "../utils/pda";
 import { PublicKey, Keypair } from '@solana/web3.js';
 
 describe("Sallar - Change Authority", async () => {

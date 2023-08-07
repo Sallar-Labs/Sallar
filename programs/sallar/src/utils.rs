@@ -330,7 +330,7 @@ pub fn switch_top_block_to_next_one_if_applicable<'a>(
         )?;
 
         state.top_block_available_bp =
-            convert_f64_to_u64_safely(calculate_max_bp(state.top_block_number)?)?;
+            convert_f64_to_u64(calculate_max_bp(state.top_block_number)?)?;
         state.top_block_balance = DUSTS_PER_BLOCK;
     }
 
@@ -388,15 +388,20 @@ pub fn switch_bottom_block_to_next_one_if_applicable<'a>(
         )?;
 
         state.bottom_block_available_bp =
-            convert_f64_to_u64_safely(calculate_max_bp(state.bottom_block_number)?)?;
+            convert_f64_to_u64(calculate_max_bp(state.bottom_block_number)?)?;
         state.bottom_block_balance = DUSTS_PER_BLOCK;
     }
 
     Ok(())
 }
 
-// Converts a given `f64` value to an `u64` value and returns it as a result.
-/// Performs various checks to ensure that the conversion is safe and accurate.
+/// Converts a given `f64` value to an `u64` value and returns it as a result.
+/// Performs various checks to ensure that the conversion can be performed,
+/// i.e. provided `f64` number is in the range of `u64`.
+///
+/// The conversion is not safe in the context of precision
+/// so there is no guarantee that provided `f64` number will be exactly the same number
+/// as in `u64` after the conversion.
 ///
 /// ### Arguments
 ///
@@ -404,26 +409,15 @@ pub fn switch_bottom_block_to_next_one_if_applicable<'a>(
 ///
 /// ### Returns
 ///
-/// The result of the conversion if it is safe and accurate, or an error if any of the checks fail. The conversion will fail if the value is not a whole number, or if it is outside of the range of the u64 data type.
-pub fn convert_f64_to_u64_safely(value: f64) -> Result<u64> {
+/// The result of the conversion if the input value is in the scope of `u64`, or an error otherwise.
+pub fn convert_f64_to_u64(value: f64) -> Result<u64> {
     require!(value <= u64::MAX as f64, SallarError::U64ConversionError);
     require!(value >= u64::MIN as f64, SallarError::U64ConversionError);
-    require!(
-        value <= (1u64 << 53) as f64,
-        SallarError::U64ConversionError
-    );
 
-    let value_u64 = value as u64;
-    require!(
-        value_u64 as f64 == value.floor(),
-        SallarError::U64ConversionError
-    );
-
-    Ok(value_u64)
+    Ok(value as u64)
 }
 
-// Converts a given `u64` value to an `f64` value and returns it as a result.
-/// Performs various checks to ensure that the conversion is safe and accurate.
+/// Converts a given `u64` value to an `f64` value and returns it as a result.
 ///
 /// ### Arguments
 ///
@@ -431,28 +425,10 @@ pub fn convert_f64_to_u64_safely(value: f64) -> Result<u64> {
 ///
 /// ### Returns
 ///
-/// The result of the conversion if it is safe and accurate, or an error if any of the checks fail.
+/// The result of the conversion.
 ///
-pub fn convert_u64_to_f64_safely(value: u64) -> Result<f64> {
-    require!(value <= f64::MAX as u64, SallarError::F64ConversionError);
-    require!(value >= f64::MIN as u64, SallarError::F64ConversionError);
-    require!(value != u64::MAX, SallarError::F64ConversionError);
-
-    let value_f64 = value as f64;
-    require!(
-        value as f64 == value_f64.floor(),
-        SallarError::F64ConversionError
-    );
-    require!(
-        value_f64.abs() <= f64::MAX - f64::EPSILON,
-        SallarError::F64ConversionError
-    );
-    require!(
-        value_f64.abs() >= f64::MIN + f64::EPSILON,
-        SallarError::F64ConversionError
-    );
-
-    Ok(value_f64)
+pub fn convert_u64_to_f64(value: u64) -> Result<f64> {
+    Ok(value as f64)
 }
 
 /// Sets token metadata
@@ -522,6 +498,7 @@ pub fn set_token_metadata(
 #[cfg(test)]
 mod test {
     use anchor_lang::err;
+    use anchor_lang::prelude::AccountInfo;
     use anchor_lang::prelude::Pubkey;
 
     use super::*;
@@ -856,46 +833,167 @@ mod test {
     }
 
     #[test]
-    fn test_convert_f64_to_u64_safely_valid() {
+    fn test_convert_f64_to_u64_valid() {
+        assert_eq!(convert_f64_to_u64((u64::MIN) as f64), Ok(0));
+        assert_eq!(convert_f64_to_u64(123.0), Ok(123));
+        assert_eq!(convert_f64_to_u64((u64::MAX) as f64), Ok(u64::MAX));
+
+        // This is the maximum value that can be represented by f64
+        // without losing precision
         assert_eq!(
-            convert_f64_to_u64_safely((1u64 << 53) as f64 - 5.0),
-            Ok((1u64 << 53) - 5)
+            convert_f64_to_u64((1u64 << 53) as f64),
+            Ok(9007199254740992)
         );
-        assert_eq!(convert_f64_to_u64_safely(123.0), Ok(123));
-        assert_eq!(convert_f64_to_u64_safely(0.0), Ok(0));
-        assert_eq!(convert_f64_to_u64_safely((u64::MIN) as f64), Ok(0));
+
+        // This value cannot be represented by f64
+        // without losing precision but it is acceptable
+        assert_eq!(
+            convert_f64_to_u64((1u64 << 53) as f64 + 1.0),
+            Ok(9007199254740992)
+        );
+
+        // This value cannot be represented by f64
+        // without losing precision but it is acceptable
+        assert_eq!(
+            convert_f64_to_u64((1u64 << 53) as f64 + 2.0),
+            Ok(9007199254740994)
+        );
     }
 
     #[test]
-    fn test_convert_f64_to_u64_safely_invalid() {
+    fn test_convert_f64_to_u64_invalid() {
         assert_eq!(
-            convert_f64_to_u64_safely(288230376151711744.0),
+            convert_f64_to_u64(f64::MIN),
             err!(SallarError::U64ConversionError)
         );
         assert_eq!(
-            convert_f64_to_u64_safely(f64::MAX),
+            convert_f64_to_u64(-1.0),
             err!(SallarError::U64ConversionError)
         );
         assert_eq!(
-            convert_f64_to_u64_safely(f64::MIN),
+            convert_f64_to_u64(-0.1),
             err!(SallarError::U64ConversionError)
         );
         assert_eq!(
-            convert_f64_to_u64_safely(f64::MAX + 1.0),
+            convert_f64_to_u64(18446744073709553665.0),
             err!(SallarError::U64ConversionError)
         );
         assert_eq!(
-            convert_f64_to_u64_safely(f64::MIN - 1.0),
+            convert_f64_to_u64(f64::MAX),
             err!(SallarError::U64ConversionError)
         );
+    }
 
-        assert_eq!(
-            convert_f64_to_u64_safely(-123.0),
-            err!(SallarError::U64ConversionError)
-        );
-        assert_eq!(
-            convert_f64_to_u64_safely(-1.0),
-            err!(SallarError::U64ConversionError)
-        );
+    #[test]
+    fn test_convert_u64_to_f64_valid() {
+        assert_eq!(convert_u64_to_f64(u64::MIN), Ok(0.0));
+        assert_eq!(convert_u64_to_f64(u64::MAX), Ok(18446744073709551615.0));
+        // The same value as for u64::MAX as the precision is lost in this case
+        // but it is acceptable
+        assert_eq!(convert_u64_to_f64(u64::MAX - 1), Ok(18446744073709551615.0));
+
+        // This is the maximum value that can be represented by f64
+        // without losing precision
+        assert_eq!(convert_u64_to_f64(9007199254740992), Ok(9007199254740992.0));
+
+        // This value cannot be represented by f64
+        // without losing precision but it is acceptable
+        assert_eq!(convert_u64_to_f64(9007199254740993), Ok(9007199254740992.0));
+
+        // This value cannot be represented by f64
+        // without losing precision but it is acceptable
+        assert_eq!(convert_u64_to_f64(9007199254740994), Ok(9007199254740994.0));
+    }
+
+    #[test]
+    fn test_can_block_be_switched_true() {
+        let mut state = BlocksState::default();
+        state.bottom_block_number = 3;
+        state.top_block_number = 1;
+
+        assert!(can_block_be_switched(&state));
+    }
+
+    #[test]
+    fn test_can_block_be_switched_false_equal() {
+        let mut state = BlocksState::default();
+        state.bottom_block_number = 2;
+        state.top_block_number = 2;
+
+        assert!(!can_block_be_switched(&state));
+    }
+
+    #[test]
+    fn test_can_block_be_switched_false_less() {
+        let mut state = BlocksState::default();
+        state.bottom_block_number = 1;
+        state.top_block_number = 2;
+
+        assert!(!can_block_be_switched(&state));
+    }
+
+    #[test]
+    fn test_can_block_be_switched_false_difference_one() {
+        let mut state = BlocksState::default();
+        state.bottom_block_number = 2;
+        state.top_block_number = 1;
+
+        assert!(!can_block_be_switched(&state));
+    }
+
+    #[cfg(feature = "bpf-tests")]
+    #[test]
+    #[should_panic]
+    fn test_mint_tokens() {
+        let mut binding_mint = 0u64;
+        let mut binding_to = 0u64;
+        let mut binding_authority = 0u64;
+        let mut binding_program_account = 0u64;
+
+        let mint: AccountInfo = AccountInfo {
+            key: &Pubkey::new_unique(),
+            is_signer: false,
+            is_writable: false,
+            lamports: Rc::new(RefCell::new(&mut binding_mint)),
+            data: Rc::new(RefCell::new(&mut [0u8; 0])),
+            owner: &Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+
+        let to: AccountInfo = AccountInfo {
+            key: &Pubkey::new_unique(),
+            is_signer: false,
+            is_writable: false,
+            lamports: Rc::new(RefCell::new(&mut binding_to)),
+            data: Rc::new(RefCell::new(&mut [0u8; 0])),
+            owner: &Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+        let authority: AccountInfo = AccountInfo {
+            key: &Pubkey::new_unique(),
+            is_signer: false,
+            is_writable: false,
+            lamports: Rc::new(RefCell::new(&mut binding_authority)),
+            data: Rc::new(RefCell::new(&mut [0u8; 0])),
+            owner: &Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+        let program_account: AccountInfo = AccountInfo {
+            key: &Pubkey::new_unique(),
+            is_signer: false,
+            is_writable: false,
+            lamports: Rc::new(RefCell::new(&mut binding_program_account)),
+            data: Rc::new(RefCell::new(&mut [0u8; 0])),
+            owner: &Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+        let mint_nonce = 0;
+        let amount = 0;
+
+        mint_tokens(mint, to, authority, program_account, mint_nonce, amount).unwrap();
     }
 }

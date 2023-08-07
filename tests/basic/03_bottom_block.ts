@@ -1,11 +1,11 @@
-import { Sallar } from "../target/types/sallar";
+import { Sallar } from "../../target/types/sallar";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { assert } from "chai";
-import { findProgramAddress } from "./utils/pda";
+import { findProgramAddress } from "../utils/pda";
 import { ComputeBudgetProgram, Connection, Transaction } from "@solana/web3.js";
-import { getTestAccounts } from "./utils/accounts";
+import { getTestAccounts } from "../utils/accounts";
 
 describe("Sallar - bottom block", async () => {
     const provider: anchor.AnchorProvider = anchor.AnchorProvider.env();
@@ -267,7 +267,7 @@ describe("Sallar - bottom block", async () => {
                 }
             });
 
-            it("FAIL - (Block Collision)", async () => {
+            it("FAIL - (Blocks collision)", async () => {
                 try {
                     const tx: string = await program.methods
                         .solveBottomBlock(user_info_bottom_block)

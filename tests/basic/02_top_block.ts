@@ -1,11 +1,11 @@
-import { Sallar } from "../target/types/sallar";
+import { Sallar } from "../../target/types/sallar";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
-import { findProgramAddress } from "./utils/pda";
+import { findProgramAddress } from "../utils/pda";
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { ComputeBudgetProgram, Connection, Transaction } from "@solana/web3.js";
-import { getTestAccounts } from "./utils/accounts";
+import { getTestAccounts } from "../utils/accounts";
 
 describe("Sallar - top block", async () => {
 	const provider: anchor.AnchorProvider = anchor.AnchorProvider.env();
@@ -245,7 +245,7 @@ describe("Sallar - top block", async () => {
                 }
             });
 
-            it("FAIL - (Block Collision)", async () => {
+            it("FAIL - (Blocks collision)", async () => {
 				try {
 					const tx: string = await program.methods
 						.solveTopBlock(
@@ -267,45 +267,5 @@ describe("Sallar - top block", async () => {
 					return;
 				}
 			});
-
-            it("PASS - User request exceeds available BPs", async () => {
-                user_info_top_block.pop();
-                user_info_top_block.pop();
-
-                user_info_top_block.push({ userPublicKey: testAccounts[0], userRequestWithoutBoost: new anchor.BN(42), userRequestWithBoost: new anchor.BN(42) });
-                user_info_top_block.push({ userPublicKey: testAccounts[1], userRequestWithoutBoost: new anchor.BN(42), userRequestWithBoost: new anchor.BN(42) });
-
-                try {
-                    const tx: anchor.web3.Transaction = await program.methods
-                        .solveTopBlock(user_info_top_block)
-                        .remainingAccounts(rem_accounts)
-                        .accounts({
-                            blocksStateAccount: blocks_state_address,
-                            distributionTopBlockAccount: distribution_top_block_address,
-                            mint: mint_address,
-                            tokenProgram: TOKEN_PROGRAM_ID,
-                            signer: provider.wallet.publicKey,
-                        })
-                        .transaction();
-                        
-                        const additionalComputeBudgetInstruction =
-                            ComputeBudgetProgram.setComputeUnitLimit({
-                                units: 1_500_000,
-                        });
-                        const transaction = new Transaction()
-                            .add(additionalComputeBudgetInstruction)
-                            .add(tx);
-            
-                        await provider.sendAndConfirm(transaction, [], {
-                            commitment: "confirmed",
-                            maxRetries: 3
-                        });
-                        assert.fail("Transaction succeeded but was expected to fail");
-
-                } catch (error) {  
-					assert.equal(error.message, 'failed to send transaction: Transaction simulation failed: Error processing Instruction 1: custom program error: 0x177a');
-                    return;
-                }
-            });
         });
     });

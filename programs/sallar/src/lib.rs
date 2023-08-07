@@ -26,7 +26,7 @@ const DISTRIBUTION_BOTTOM_BLOCK_SEED: &str = "distribution_bottom_block";
 const FINAL_STAKING_ACCOUNT_SEED: &str = "final_staking";
 const FINAL_MINING_ACCOUNT_SEED: &str = "final_mining";
 
-declare_id!("GKfKLJS8rnwWuKBdQtic5FC6psq44Pr7H7RPtV94fxaN");
+declare_id!("nYcjEnRy1ubJtjoGUhT2RVW6o5H5vkiDaHfCTZqzds6");
 
 /// This program is used to mint and distribute Sallar tokens.
 #[program]
@@ -40,7 +40,7 @@ pub mod sallar {
     };
     use utils::{
         blocks_collided, blocks_solution_required_interval_elapsed, blocks_solved,
-        bottom_block_not_solved, convert_f64_to_u64_safely, convert_u64_to_f64_safely,
+        bottom_block_not_solved, convert_f64_to_u64, convert_u64_to_f64,
         final_staking_required_interval_elapsed, initial_token_distribution_not_performed_yet,
         mint_tokens, set_token_metadata, switch_bottom_block_to_next_one_if_applicable,
         switch_top_block_to_next_one_if_applicable, top_block_not_solved, transfer_tokens,
@@ -92,7 +92,7 @@ pub mod sallar {
         blocks_state.top_block_last_account_rest_bp = 0;
 
         blocks_state.top_block_available_bp =
-            convert_f64_to_u64_safely(calculate_max_bp(blocks_state.top_block_number)?)?;
+            convert_f64_to_u64(calculate_max_bp(blocks_state.top_block_number)?)?;
         blocks_state.top_block_balance = DUSTS_PER_BLOCK;
 
         mint_tokens(
@@ -115,7 +115,7 @@ pub mod sallar {
         blocks_state.bottom_block_last_account_rest_bp = 0;
 
         blocks_state.bottom_block_available_bp =
-            convert_f64_to_u64_safely(calculate_max_bp(blocks_state.bottom_block_number)?)?;
+            convert_f64_to_u64(calculate_max_bp(blocks_state.bottom_block_number)?)?;
         blocks_state.bottom_block_balance = DUSTS_PER_BLOCK;
 
         mint_tokens(
@@ -546,12 +546,10 @@ pub mod sallar {
         let mut total_users_reward_part = 0.0;
 
         if blocks_state.final_staking_left_balance_in_round == 0 {
-            let final_staking_account_balance = convert_u64_to_f64_safely(
-                token::accessor::amount(&ctx.accounts.final_staking_account.to_account_info())?,
-            )?;
-            blocks_state.final_staking_pool_in_round =
-                convert_f64_to_u64_safely(final_staking_account_balance)?
-                    / FINAL_STAKING_ACCOUNT_BALANCE_PART_FOR_STAKING_DIVISION_FACTOR;
+            let final_staking_account_balance =
+                token::accessor::amount(&ctx.accounts.final_staking_account.to_account_info())?;
+            blocks_state.final_staking_pool_in_round = final_staking_account_balance
+                / FINAL_STAKING_ACCOUNT_BALANCE_PART_FOR_STAKING_DIVISION_FACTOR;
 
             require!(
                 blocks_state.final_staking_pool_in_round > 0,
@@ -602,9 +600,9 @@ pub mod sallar {
                 if reward_parts_pool_after_user == 0.0 {
                     current_user_transfer_amount = blocks_state.final_staking_left_balance_in_round;
                 } else {
-                    current_user_transfer_amount = convert_f64_to_u64_safely(
+                    current_user_transfer_amount = convert_f64_to_u64(
                         user_sub_info.reward_part
-                            * convert_u64_to_f64_safely(blocks_state.final_staking_pool_in_round)?,
+                            * convert_u64_to_f64(blocks_state.final_staking_pool_in_round)?,
                     )?;
                 }
 
@@ -648,6 +646,30 @@ pub mod sallar {
     ) -> Result<()> {
         let blocks_state_account = &mut ctx.accounts.blocks_state_account;
         blocks_state_account.authority = new_authority;
+
+        Ok(())
+    }
+
+    /// Set blocks collided flag
+    /// This function is only available in tests
+    ///
+    /// ### Arguments
+    ///
+    /// * `collided` - new value of blocks collided flag
+    #[access_control(valid_owner(&ctx.accounts.blocks_state_account, &ctx.accounts.signer) valid_signer(&ctx.accounts.signer))]
+    pub fn set_blocks_collided<'info>(
+        ctx: Context<'_, '_, '_, 'info, SetBlocksCollidedContext<'info>>,
+        collided: bool,
+    ) -> Result<()> {
+        require!(
+            cfg!(feature = "bpf-tests"),
+            SallarError::ExecutionOfSetBlocksCollidedFunctionOutsideTests
+        );
+
+        let blocks_state_account = &mut ctx.accounts.blocks_state_account;
+        blocks_state_account.blocks_collided = collided;
+        blocks_state_account.top_block_available_bp = 0;
+        blocks_state_account.bottom_block_available_bp = 0;
 
         Ok(())
     }
@@ -705,11 +727,16 @@ mod test {
     use solana_program::{
         hash::Hash, instruction::Instruction, program_pack::Pack, system_instruction,
     };
-
     use utils::final_staking_required_interval_elapsed;
 
     #[cfg(feature = "bpf-tests")]
-    use solana_program::sysvar::clock::Clock;
+    use solana_program::{instruction::InstructionError, sysvar::clock::Clock};
+
+    #[cfg(feature = "bpf-tests")]
+    use std::collections::HashMap;
+
+    #[cfg(feature = "bpf-tests")]
+    use solana_sdk::transaction::TransactionError;
 
     impl Clone for UserInfoBottomBlock {
         fn clone(&self) -> Self {
@@ -987,6 +1014,42 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "bpf-tests")]
+    async fn set_blocks_collided_instruction(
+        banks_client: &mut BanksClient,
+        payer: &Keypair,
+        recent_blockhash: Hash,
+        collided: bool,
+    ) -> Result<()> {
+        let program_id = id();
+        let (_, _, blocks_state_pda, _, _, _, _, _, _, _, _, _) = get_pda_accounts();
+
+        let signer = payer.pubkey();
+
+        let data = instruction::SetBlocksCollided { collided }.data();
+
+        let accs = accounts::SetBlocksCollidedContext {
+            blocks_state_account: blocks_state_pda,
+            signer,
+        };
+
+        let accounts = accs.to_account_metas(Some(false));
+
+        let mut transaction = Transaction::new_with_payer(
+            &[Instruction::new_with_bytes(program_id, &data, accounts)],
+            Some(&payer.pubkey()),
+        );
+
+        transaction.sign(&[payer], recent_blockhash);
+
+        banks_client
+            .process_transaction_with_commitment(transaction, CommitmentLevel::Confirmed)
+            .await
+            .unwrap();
+
+        Ok(())
+    }
+
     async fn default_top_block_setup(
         banks_client: &mut BanksClient,
         payer: &Keypair,
@@ -1094,7 +1157,7 @@ mod test {
 
     #[cfg(feature = "bpf-tests")]
     #[tokio::test]
-    async fn test_solve_top_two_blocks_move_time() {
+    async fn test_solve_top_two_blocks_with_user_rest() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(5000000);
@@ -1106,7 +1169,7 @@ mod test {
         let mut banks_client = program_test_context.banks_client.clone();
         let recent_blockhash = program_test_context.last_blockhash;
 
-        let time_in_timestamp = 1677978061;
+        let mut time_in_timestamp = 1677978061;
         set_time(&mut program_test_context, time_in_timestamp).await;
 
         initialize_instruction(
@@ -1117,8 +1180,21 @@ mod test {
         .await
         .unwrap();
 
-        let (key_list, users_info) =
-            default_top_block_setup(&mut banks_client, &program_test_context.payer).await;
+        let (mint_pda, _, _, _, _, _, _, _, _, _, _, _) = get_pda_accounts();
+
+        let key_list = vec![create_token_account(
+            &mut banks_client,
+            &program_test_context.payer,
+            recent_blockhash,
+            mint_pda,
+        )
+        .await
+        .unwrap()];
+        let users_info: Vec<UserInfoTopBlock> = vec![UserInfoTopBlock {
+            user_public_key: key_list[0].clone(),
+            user_request_without_boost: 50,
+            user_request_with_boost: 0,
+        }];
 
         for _ in 0..2 {
             let recent_blockhash = program_test_context
@@ -1135,10 +1211,35 @@ mod test {
             )
             .await
             .unwrap();
+
+            // move time forward for 3 minutes to pass the required time between solved blocks
+            time_in_timestamp = time_in_timestamp + 180;
+            set_time(&mut program_test_context, time_in_timestamp).await;
         }
 
-        let time_in_timestamp = 1709600470;
-        set_time(&mut program_test_context, time_in_timestamp).await;
+        let key_list = vec![
+            key_list[0],
+            create_token_account(
+                &mut banks_client,
+                &program_test_context.payer,
+                recent_blockhash,
+                mint_pda,
+            )
+            .await
+            .unwrap(),
+        ];
+        let users_info: Vec<UserInfoTopBlock> = vec![
+            UserInfoTopBlock {
+                user_public_key: key_list[0].clone(),
+                user_request_without_boost: 0,
+                user_request_with_boost: 0,
+            },
+            UserInfoTopBlock {
+                user_public_key: key_list[1].clone(),
+                user_request_without_boost: 7,
+                user_request_with_boost: 0,
+            },
+        ];
 
         let recent_blockhash = program_test_context
             .banks_client
@@ -1155,10 +1256,12 @@ mod test {
         .await
         .unwrap();
 
+        let expected_user_balances: HashMap<Pubkey, u64> =
+            HashMap::from([(key_list[0], 5000000000000), (key_list[1], 700000000000)]);
         for key in key_list.iter() {
-            let account = banks_client.get_account(*key).await.unwrap().unwrap();
-            let account_data = Account::unpack(&account.data).unwrap();
-            assert_eq!(account_data.amount, 600000000000);
+            let user_account = (&mut banks_client).get_account(*key).await.unwrap();
+            let user_account_data = Account::unpack(&user_account.unwrap().data).unwrap();
+            assert_eq!(user_account_data.amount, expected_user_balances[key]);
         }
     }
 
@@ -1267,7 +1370,7 @@ mod test {
 
     #[cfg(feature = "bpf-tests")]
     #[tokio::test]
-    async fn test_solve_bottom_block_two_blocks() {
+    async fn test_solve_bottom_two_blocks_with_user_rest() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(5000000);
@@ -1279,6 +1382,9 @@ mod test {
         let mut banks_client = program_test_context.banks_client.clone();
         let recent_blockhash = program_test_context.last_blockhash;
 
+        let time_in_timestamp = 1677978061;
+        set_time(&mut program_test_context, time_in_timestamp).await;
+
         initialize_instruction(
             &mut banks_client,
             &program_test_context.payer,
@@ -1287,24 +1393,49 @@ mod test {
         .await
         .unwrap();
 
-        let (key_list, users_info) =
-            default_bottom_block_setup(&mut banks_client, &program_test_context.payer).await;
+        let payer = &program_test_context.payer;
 
-        for _ in 0..2 {
-            let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
-            solve_bottom_block_instruction(
-                &mut banks_client,
-                &program_test_context.payer,
-                recent_blockhash,
-                &key_list,
-                &users_info,
-            )
-            .await
-            .unwrap();
+        let (mint_pda, _, _, _, _, _, _, _, _, _, _, _) = get_pda_accounts();
+
+        let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
+        let mut key_list = vec![
+            create_token_account(&mut banks_client, &payer, recent_blockhash, mint_pda)
+                .await
+                .unwrap(),
+            create_token_account(&mut banks_client, &payer, recent_blockhash, mint_pda)
+                .await
+                .unwrap(),
+        ];
+
+        let mut users_info: Vec<UserInfoBottomBlock> = vec![];
+        for key in key_list.iter() {
+            users_info.push(UserInfoBottomBlock {
+                user_public_key: key.clone(),
+                user_balance: 200_000_000_000_000,
+                user_request_without_boost: 255,
+                user_request_with_boost: 255,
+            });
         }
 
-        let time_in_timestamp = 1709600470;
+        let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
+        solve_bottom_block_instruction(
+            &mut banks_client,
+            &program_test_context.payer,
+            recent_blockhash,
+            &key_list,
+            &users_info,
+        )
+        .await
+        .unwrap();
+
+        // move time forward for 3 minutes to pass the required time between solved blocks
+        let time_in_timestamp = time_in_timestamp + 180;
         set_time(&mut program_test_context, time_in_timestamp).await;
+
+        // the user that solved the previous block must be provided as the first one in the request to solve next block
+        // so one of ways to do this is to reuse the users provided in the first request but in the reversed order
+        key_list.reverse();
+        users_info.reverse();
 
         let recent_blockhash = program_test_context
             .banks_client
@@ -1321,10 +1452,12 @@ mod test {
         .await
         .unwrap();
 
+        let expected_user_balances: HashMap<Pubkey, u64> =
+            HashMap::from([(key_list[0], 1173789936729), (key_list[1], 2347582599105)]);
         for key in key_list.iter() {
             let user_account = (&mut banks_client).get_account(*key).await.unwrap();
             let user_account_data = Account::unpack(&user_account.unwrap().data).unwrap();
-            assert_eq!(user_account_data.amount, 3000005694825);
+            assert_eq!(user_account_data.amount, expected_user_balances[key]);
         }
     }
 
@@ -1359,18 +1492,21 @@ mod test {
         }
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
-    #[should_panic]
-    async fn test_final_mining() {
+    async fn test_final_mining_fail_blocks_not_collided() {
         let program_id = id();
-        let program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
+        program_test.prefer_bpf(true);
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
         initialize_instruction(&mut banks_client, &payer, recent_blockhash)
             .await
             .unwrap();
 
-        let program_id = id();
         let (mint_pda, _, blocks_state_pda, _, _, _, _, _, _, _, final_mining_account_pda, _) =
             get_pda_accounts();
 
@@ -1432,15 +1568,87 @@ mod test {
         );
 
         transaction.sign(&[&payer], recent_blockhash);
+        let error = banks_client
+            .process_transaction_with_commitment(transaction.clone(), CommitmentLevel::Finalized)
+            .await
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(get_custom_error_code(error).unwrap(), 6007);
+    }
+
+    #[cfg(feature = "bpf-tests")]
+    #[tokio::test]
+    async fn test_final_mining() {
+        let program_id = id();
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
+        program_test.prefer_bpf(true);
+
+        let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
+
+        initialize_instruction(&mut banks_client, &payer, recent_blockhash)
+            .await
+            .unwrap();
+
+        let (mint_pda, _, blocks_state_pda, _, _, _, _, _, _, _, final_mining_account_pda, _) =
+            get_pda_accounts();
+
+        initial_token_distribution_instruction(
+            &mut banks_client,
+            &payer,
+            recent_blockhash,
+            final_mining_account_pda,
+        )
+        .await
+        .unwrap();
+
+        set_blocks_collided_instruction(&mut banks_client, &payer, recent_blockhash, true)
+            .await
+            .unwrap();
+
+        let token_program = spl_token::id();
+        let signer = payer.pubkey();
+
+        let key_list =
+            vec![
+                create_token_account(&mut banks_client, &payer, recent_blockhash, mint_pda)
+                    .await
+                    .unwrap(),
+            ];
+
+        let users_info: Vec<UserInfoFinalMining> = vec![UserInfoFinalMining {
+            user_public_key: key_list[0],
+            final_mining_balance: 1,
+        }];
+
+        let data = instruction::FinalMining { users_info }.data();
+
+        let accs = accounts::FinalMiningContext {
+            blocks_state_account: blocks_state_pda,
+            final_mining_account: final_mining_account_pda,
+            token_program,
+            signer,
+        };
+
+        let mut accounts = accs.to_account_metas(Some(false));
+        accounts.push(AccountMeta::new(key_list[0], false));
+
+        let mut transaction = Transaction::new_with_payer(
+            &[Instruction::new_with_bytes(program_id, &data, accounts)],
+            Some(&payer.pubkey()),
+        );
+
+        transaction.sign(&[&payer], recent_blockhash);
         banks_client
             .process_transaction_with_commitment(transaction.clone(), CommitmentLevel::Finalized)
             .await
             .unwrap();
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
-    #[should_panic]
-    async fn test_final_staking() {
+    async fn test_final_staking_fail_blocks_not_collided() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
 
@@ -1516,8 +1724,82 @@ mod test {
         );
 
         transaction.sign(&[&payer], recent_blockhash);
-        banks_client
+        let error = banks_client
             .process_transaction_with_commitment(transaction.clone(), CommitmentLevel::Finalized)
+            .await
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(get_custom_error_code(error).unwrap(), 6007);
+    }
+
+    #[cfg(feature = "bpf-tests")]
+    #[tokio::test]
+    async fn test_final_staking() {
+        let program_id = id();
+        let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
+
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
+        program_test.prefer_bpf(true);
+
+        let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
+
+        initialize_instruction(&mut banks_client, &payer, recent_blockhash)
+            .await
+            .unwrap();
+
+        let (mint_pda, _, blocks_state_pda, _, _, _, _, _, final_staking_account_pda, _, _, _) =
+            get_pda_accounts();
+
+        initial_token_distribution_instruction(
+            &mut banks_client,
+            &payer,
+            recent_blockhash,
+            final_staking_account_pda,
+        )
+        .await
+        .unwrap();
+
+        set_blocks_collided_instruction(&mut banks_client, &payer, recent_blockhash, true)
+            .await
+            .unwrap();
+
+        let program_id = id();
+
+        let token_program = spl_token::id();
+        let signer = payer.pubkey();
+
+        let key_list =
+            vec![
+                create_token_account(&mut banks_client, &payer, recent_blockhash, mint_pda)
+                    .await
+                    .unwrap(),
+            ];
+
+        let users_info: Vec<UserInfoFinalStaking> = vec![UserInfoFinalStaking {
+            user_public_key: key_list[0],
+            reward_part: 0.1,
+        }];
+
+        let data = instruction::FinalStaking { users_info }.data();
+
+        let accs = accounts::FinalStakingContext {
+            blocks_state_account: blocks_state_pda,
+            final_staking_account: final_staking_account_pda,
+            token_program,
+            signer,
+        };
+
+        let mut accounts = accs.to_account_metas(Some(false));
+        accounts.push(AccountMeta::new(key_list[0], false));
+
+        let mut transaction = Transaction::new_with_payer(
+            &[Instruction::new_with_bytes(program_id, &data, accounts)],
+            Some(&payer.pubkey()),
+        );
+
+        transaction.sign(&[&payer], recent_blockhash);
+        banks_client
+            .process_transaction_with_commitment(transaction.clone(), CommitmentLevel::Confirmed)
             .await
             .unwrap();
     }
@@ -1570,12 +1852,15 @@ mod test {
         banks_client.process_transaction(transaction).await.unwrap();
     }
 
+    #[cfg(feature = "bpf-tests")]
     #[tokio::test]
-    #[should_panic]
     async fn test_new_authority_with_wrong_signer() {
         let program_id = id();
         let mut program_test = ProgramTest::new("sallar", program_id, processor!(entry));
         program_test.set_compute_max_units(500000);
+
+        program_test.add_program("mpl_token_metadata", mpl_token_metadata::id(), None);
+        program_test.prefer_bpf(true);
 
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
         let signer = payer.pubkey();
@@ -1591,10 +1876,10 @@ mod test {
         }
         .data();
 
-        let sub_signer = Keypair::new().pubkey();
+        let sub_signer = Keypair::new();
         let accs = accounts::ChangeAuthorityContext {
             blocks_state_account: blocks_state_pda,
-            signer: sub_signer,
+            signer: sub_signer.pubkey(),
         };
 
         let mut transaction = Transaction::new_with_payer(
@@ -1606,8 +1891,13 @@ mod test {
             Some(&payer.pubkey()),
         );
 
-        transaction.sign(&[&payer], recent_blockhash);
-        banks_client.process_transaction(transaction).await.unwrap();
+        transaction.sign(&[&payer, &sub_signer], recent_blockhash);
+        let error = banks_client
+            .process_transaction(transaction)
+            .await
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(get_custom_error_code(error).unwrap(), 6000);
     }
 
     async fn create_token_account(
@@ -1697,5 +1987,14 @@ mod test {
         new_clock.unix_timestamp = time;
 
         ctx.set_sysvar(&new_clock);
+    }
+
+    #[cfg(feature = "bpf-tests")]
+    fn get_custom_error_code(error: TransactionError) -> Option<u32> {
+        if let TransactionError::InstructionError(_, InstructionError::Custom(error_code)) = error {
+            Some(error_code)
+        } else {
+            None
+        }
     }
 }

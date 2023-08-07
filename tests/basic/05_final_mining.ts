@@ -3,9 +3,9 @@ import { Program } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { ComputeBudgetProgram, Connection, Transaction } from "@solana/web3.js";
 import { assert } from "chai";
-import { Sallar } from "../target/types/sallar";
-import { getTestAccounts } from "./utils/accounts";
-import { findProgramAddress } from "./utils/pda";
+import { Sallar } from "../../target/types/sallar";
+import { getTestAccounts } from "../utils/accounts";
+import { findProgramAddress } from "../utils/pda";
 
 describe("Sallar - Final mining", async () => {
     const provider: anchor.AnchorProvider = anchor.AnchorProvider.env();

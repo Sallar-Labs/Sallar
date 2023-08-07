@@ -292,3 +292,14 @@ pub struct ChangeAuthorityContext<'info> {
     pub blocks_state_account: Box<Account<'info, BlocksState>>,
     pub signer: Signer<'info>,
 }
+
+#[derive(Accounts)]
+pub struct SetBlocksCollidedContext<'info> {
+    #[account(
+        mut,
+        seeds = [BLOCKS_STATE_SEED.as_bytes()],
+        bump = blocks_state_account.block_state_nonce,
+    )]
+    pub blocks_state_account: Box<Account<'info, BlocksState>>,
+    pub signer: Signer<'info>,
+}

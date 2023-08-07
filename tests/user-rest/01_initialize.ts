@@ -1,19 +1,18 @@
-import { Sallar } from "../target/types/sallar";
 import * as anchor from "@coral-xyz/anchor";
-import { Program, Wallet } from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import * as mpl from "@metaplex-foundation/mpl-token-metadata";
+import { programs } from "@metaplex/js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { assert } from "chai";
-import { findProgramAddress } from "./utils/pda";
-import { 
+import {
     ComputeBudgetProgram,
     Connection,
     Transaction,
 } from "@solana/web3.js";
-import { getTestAccounts } from "./utils/accounts";
-import * as mpl from "@metaplex-foundation/mpl-token-metadata";
-import { programs } from "@metaplex/js";
+import { assert } from "chai";
+import { Sallar } from "../../target/types/sallar";
+import { findProgramAddress } from "../utils/pda";
 
-describe("Sallar", async () => {
+describe("Sallar - user rest mechanism - initialize", async () => {
     const provider: anchor.AnchorProvider = anchor.AnchorProvider.env();
     anchor.setProvider(provider);
 
@@ -42,17 +41,8 @@ describe("Sallar", async () => {
     let token_symbol: string = 'ALL';
     let token_metadata_uri: string = 'http://sallar.io';
 
-    let testAccounts: Array<anchor.web3.PublicKey> = [];
-
-    let rem_accounts: any = [];
-    let user_info_top_block = [];
-    let user_info_bottom_block = [];
-    let user_info_final_staking = [];
-
-    let organization_account: anchor.web3.PublicKey = null;
-
-    describe("Initializes state", async () => {
-        it("Initialize test state", async () => {
+    describe("Initializes state", () => {
+        before("Initialize test state", () => {
             [mint_address, mint_bump] = findProgramAddress("sallar");
             [blocks_state_address, blocks_state_bump] =
                 findProgramAddress("blocks_state");
@@ -69,7 +59,7 @@ describe("Sallar", async () => {
             ] = findProgramAddress("distribution_bottom_block");
         });
 
-        it("Is initialized!", async () => {
+        it("Initialize", async () => {
             const metadataPdaSeed1 = Buffer.from(
                 anchor.utils.bytes.utf8.encode("metadata"),
             );
@@ -186,98 +176,6 @@ describe("Sallar", async () => {
                 token_symbol,
             );
             assert.equal(tokenMetadata.data.data.uri.slice(0, token_metadata_uri.length), token_metadata_uri);
-        });
-
-        it("PASS - Create 2 new remainingTokenAccounts", async () => {
-            testAccounts = await getTestAccounts(0, 2, connection);
-            organization_account = testAccounts[0];
-
-            for (let i = 0; i < testAccounts.length; i++) {
-                rem_accounts.push({
-                    pubkey: testAccounts[i],
-                    isWritable: true,
-                    isSigner: false,
-                });
-
-                user_info_top_block.push({
-                    userPublicKey: testAccounts[i],
-                    userRequestWithoutBoost: new anchor.BN(1),
-                    userRequestWithBoost: new anchor.BN(0),
-                });
-                user_info_bottom_block.push({
-                    userPublicKey: testAccounts[i],
-                    userBalance: new anchor.BN(2_000_000_000),
-                    userRequestWithoutBoost: new anchor.BN(1),
-                    userRequestWithBoost: new anchor.BN(0),
-                });
-                user_info_final_staking.push({
-                    userPublicKey: testAccounts[i],
-                    rewardPart: 0.2,
-                });
-            }
-        });
-
-        describe("Initial token distribution", () => {
-            it("Pass - (Initial token distribution)", async () => {
-                await program.methods
-                    .initialTokenDistribution()
-                    .accounts({
-                        blocksStateAccount: blocks_state_address,
-                        mint: mint_address,
-                        organizationAccount: organization_account,
-                        tokenProgram: TOKEN_PROGRAM_ID,
-                        signer: provider.wallet.publicKey,
-                    })
-                    .rpc({maxRetries: 3});
-            });
-
-            it("FAIL - (Second run Initial Sale)", async () => {
-                try {
-                    await program.methods
-                        .initialTokenDistribution()
-                        .accounts({
-                            blocksStateAccount: blocks_state_address,
-                            mint: mint_address,
-                            organizationAccount: organization_account,
-                            tokenProgram: TOKEN_PROGRAM_ID,
-                            signer: provider.wallet.publicKey,
-                        })
-                        .rpc();
-                        assert.fail("Transaction succeeded but was expected to fail");
-                } catch (error) {
-                    assert.equal(
-                        error.error.errorMessage,
-                        "Initial token distribution already performed",
-                    );
-
-                    return;
-                }
-            });
-        });
-
-        describe("Block collison", () => {
-            it("FAIL - (Second run Initial Sale)", async () => {
-                try {
-                    await program.methods
-                        .initialTokenDistribution()
-                        .accounts({
-                            blocksStateAccount: blocks_state_address,
-                            mint: mint_address,
-                            organizationAccount: organization_account,
-                            tokenProgram: TOKEN_PROGRAM_ID,
-                            signer: provider.wallet.publicKey,
-                        })
-                        .rpc();
-                        assert.fail("Transaction succeeded but was expected to fail");
-                } catch (error) {
-                    assert.equal(
-                        error.error.errorMessage,
-                        "Initial token distribution already performed",
-                    );
-
-                    return;
-                }
-            });
         });
     });
 });

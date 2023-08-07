@@ -1,6 +1,6 @@
 use anchor_lang::error::Error;
 
-use crate::utils::{convert_f64_to_u64_safely, convert_u64_to_f64_safely};
+use crate::utils::{convert_f64_to_u64, convert_u64_to_f64};
 
 /// In this module for numerical calculations, we have carefully considered the appropriate data types to use for different types of calculations.
 /// To ensure accurate and efficient computations, we have employed a strategy that utilizes f64 for non-financial calculations and u64 for financial calculations.
@@ -52,7 +52,7 @@ fn dust_to_staking_sallar(dusts: u64) -> u64 {
 }
 
 fn calculate_bp_reduction_factor(block_index: u64) -> Result<f64, Error> {
-    Ok(REDUCTION_INVERSE.powf(convert_u64_to_f64_safely(block_index - 1)?))
+    Ok(REDUCTION_INVERSE.powf(convert_u64_to_f64(block_index - 1)?))
 }
 
 pub fn calculate_max_bp(block_index: u64) -> Result<f64, Error> {
@@ -63,22 +63,22 @@ pub fn calculate_max_bp(block_index: u64) -> Result<f64, Error> {
 
 pub fn calculate_dust_per_bp(block_index: u64) -> Result<f64, Error> {
     let max_bp = calculate_max_bp(block_index)?;
-    Ok(convert_u64_to_f64_safely(DUSTS_PER_BLOCK)? / max_bp)
+    Ok(convert_u64_to_f64(DUSTS_PER_BLOCK)? / max_bp)
 }
 
 fn calculate_top_block_max_boost(block_index: u64) -> Result<u64, Error> {
-    let exp = convert_u64_to_f64_safely(block_index)? - TOP_FIRST_BOOSTED_BLOCK;
+    let exp = convert_u64_to_f64(block_index)? - TOP_FIRST_BOOSTED_BLOCK;
     let pow = TOP_BOOST_REDUCTION.powf(exp);
 
     let base_boost = MIN_TOP_BOOST * pow;
     let rounded_boost;
 
     if base_boost < 1e+2 {
-        rounded_boost = convert_f64_to_u64_safely(base_boost.round())?;
+        rounded_boost = convert_f64_to_u64(base_boost.round())?;
     } else if base_boost < 1e+3 {
-        rounded_boost = convert_f64_to_u64_safely(base_boost * 0.1)? * 10;
+        rounded_boost = convert_f64_to_u64(base_boost * 0.1)? * 10;
     } else {
-        rounded_boost = convert_f64_to_u64_safely(base_boost * 0.01)? * 100;
+        rounded_boost = convert_f64_to_u64(base_boost * 0.01)? * 100;
     }
 
     Ok(rounded_boost)
@@ -100,9 +100,9 @@ pub fn calculate_top_bp_with_boost(block_index: u64) -> Result<u64, Error> {
 
 fn calculate_bottom_block_max_boost(block_index: u64) -> Result<u64, Error> {
     let base_boost = MAX_BOTTOM_BOOST
-        * BOTTOM_BOOST_REDUCTION.powf(convert_u64_to_f64_safely(MAX_BLOCK_INDEX - block_index)?);
+        * BOTTOM_BOOST_REDUCTION.powf(convert_u64_to_f64(MAX_BLOCK_INDEX - block_index)?);
 
-    convert_f64_to_u64_safely(base_boost.round())
+    convert_f64_to_u64(base_boost.round())
 }
 
 fn calculate_bottom_bp(user_wallet_balance: u64, boost: u64) -> u64 {
@@ -123,8 +123,8 @@ pub fn calculate_bottom_bp_with_boost(
 }
 
 pub fn calculate_single_reward(bp: u64, dust_per_bp: f64) -> Result<u64, Error> {
-    Ok(convert_f64_to_u64_safely(
-        (convert_u64_to_f64_safely(bp)? * dust_per_bp).round(),
+    Ok(convert_f64_to_u64(
+        (convert_u64_to_f64(bp)? * dust_per_bp).round(),
     )?)
 }
 

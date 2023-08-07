@@ -45,4 +45,6 @@ pub enum SallarError {
     F64ConversionError = 19,
     #[msg("U64 conversion error occurred")]
     U64ConversionError = 20,
+    #[msg("Illegal execution of set_blocks_collided function outside tests")]
+    ExecutionOfSetBlocksCollidedFunctionOutsideTests = 21,
 }

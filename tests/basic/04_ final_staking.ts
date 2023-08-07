@@ -1,12 +1,12 @@
-import { Sallar } from "../target/types/sallar";
+import { Sallar } from "../../target/types/sallar";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { ComputeBudgetProgram, Transaction, Connection } from "@solana/web3.js";
-import { getTestAccounts } from "./utils/accounts";
+import { getTestAccounts } from "../utils/accounts";
 import { describe } from "mocha";
-import { findProgramAddress } from "./utils/pda";
+import { findProgramAddress } from "../utils/pda";
 
 describe("Sallar - Final staking", async () => {
     const provider: anchor.AnchorProvider = anchor.AnchorProvider.env();
