@@ -26,7 +26,7 @@ const DISTRIBUTION_BOTTOM_BLOCK_SEED: &str = "distribution_bottom_block";
 const FINAL_STAKING_ACCOUNT_SEED: &str = "final_staking";
 const FINAL_MINING_ACCOUNT_SEED: &str = "final_mining";
 
-declare_id!("nYcjEnRy1ubJtjoGUhT2RVW6o5H5vkiDaHfCTZqzds6");
+declare_id!("EcGjNrT4cv3gr1m989ScV9FhFHK6fwQRbYDDeXQFyzop");
 
 /// This program is used to mint and distribute Sallar tokens.
 #[program]
