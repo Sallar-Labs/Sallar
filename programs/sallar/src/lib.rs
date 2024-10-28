@@ -110,7 +110,7 @@ pub mod sallar {
             ctx.accounts.distribution_bottom_block_account.key();
         blocks_state.bottom_block_distribution_nonce = bottom_block_nonce;
         blocks_state.bottom_block_solution_timestamp = 0;
-        blocks_state.bottom_block_number = 2_600_000_u64;
+        blocks_state.bottom_block_number = 470_000_u64;
         blocks_state.bottom_block_last_account_address = None;
         blocks_state.bottom_block_last_account_rest_bp = 0;
 
