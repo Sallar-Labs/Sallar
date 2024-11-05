@@ -7,11 +7,11 @@ address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 program = "programs/sallar/tests/fixtures/mpl_token_metadata.so"
 
 [programs.localnet]
-sallar = "EcGjNrT4cv3gr1m989ScV9FhFHK6fwQRbYDDeXQFyzop"
+sallar = "ALLdaozmHS1MTT2dMtVUW6LUbDeJGNAMAxU8q9wN6Nny"
 [programs.devnet]
-sallar = "EcGjNrT4cv3gr1m989ScV9FhFHK6fwQRbYDDeXQFyzop"
+sallar = "ALLdaozmHS1MTT2dMtVUW6LUbDeJGNAMAxU8q9wN6Nny"
 [programs.testnet]
-sallar = "EcGjNrT4cv3gr1m989ScV9FhFHK6fwQRbYDDeXQFyzop"
+sallar = "ALLdaozmHS1MTT2dMtVUW6LUbDeJGNAMAxU8q9wN6Nny"
 
 [registry]
 url = "https://api.apr.dev"

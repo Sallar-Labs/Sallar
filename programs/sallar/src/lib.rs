@@ -26,7 +26,7 @@ const DISTRIBUTION_BOTTOM_BLOCK_SEED: &str = "distribution_bottom_block";
 const FINAL_STAKING_ACCOUNT_SEED: &str = "final_staking";
 const FINAL_MINING_ACCOUNT_SEED: &str = "final_mining";
 
-declare_id!("EcGjNrT4cv3gr1m989ScV9FhFHK6fwQRbYDDeXQFyzop");
+declare_id!("ALLdaozmHS1MTT2dMtVUW6LUbDeJGNAMAxU8q9wN6Nny");
 
 /// This program is used to mint and distribute Sallar tokens.
 #[program]
@@ -110,7 +110,7 @@ pub mod sallar {
             ctx.accounts.distribution_bottom_block_account.key();
         blocks_state.bottom_block_distribution_nonce = bottom_block_nonce;
         blocks_state.bottom_block_solution_timestamp = 0;
-        blocks_state.bottom_block_number = 2_600_000_u64;
+        blocks_state.bottom_block_number = 470_000_u64;
         blocks_state.bottom_block_last_account_address = None;
         blocks_state.bottom_block_last_account_rest_bp = 0;
 
